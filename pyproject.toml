@@ -1,0 +1,31 @@
+[project]
+name = "harness-evals"
+version = "0.1.0"
+description = "Evaluate an agent harness or workflow with the model held fixed: use-case tasks, repeated trials, hard checks, paired comparisons."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+harness-evals = "harness_evals.cli:main"
+
+[project.urls]
+Source = "https://github.com/slavadubrov/harness-evals"
+
+[dependency-groups]
+dev = ["pytest>=8.3", "ruff>=0.6"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
