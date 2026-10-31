@@ -59,6 +59,8 @@ def compare(
         raise ValueError("the harnesses share no tasks")
     d = [rc[t] - rb[t] for t in shared]
     names = (base[0].episode.harness or "base", candidate[0].episode.harness or "candidate")
+    if names[0] == names[1]:  # two versions of one harness
+        names = (f"{names[0]} (base)", f"{names[1]} (candidate)")
     sb = summarize(base, usecase.metrics, seed)
     sc = summarize(candidate, usecase.metrics, seed)
     c = Comparison(

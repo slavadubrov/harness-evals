@@ -49,25 +49,34 @@ from harness_evals import Episode, Task, UseCase, at_most, did, never, run, says
 USECASE = UseCase(
     name="refund-desk",
     tasks=[
-        Task("refund-ok", "ana: order A1 arrived broken, please refund it",
-             (did("refund", order="A1"), at_most(1, "refund"), says(r"refunded"))),
-        Task("refund-late", "ana: refund order A2",
-             (never("refund"), says(r"30 days"))),
+        Task(
+            "refund-ok",
+            "ana: order A1 arrived broken, please refund it",
+            (did("refund", order="A1"), at_most(1, "refund"), says(r"refunded")),
+        ),
+        Task("refund-late", "ana: refund order A2", (never("refund"), says(r"30 days"))),
     ],
     gates={"violations": ("<=", 0), "pass^k": (">=", 0.9)},
 )
 
+
 def my_agent(tasks, trial):
     episodes = []
     for task in tasks:
-        env = Environment()                        # records what really happened
-        reply = run_my_agent(task.input, env)      # your harness
-        episodes.append(Episode(task.id, reply=reply, actions=env.log,
-                                cost_usd=env.cost, latency_s=env.seconds))
+        env = Environment()  # records what really happened
+        reply = run_my_agent(task.input, env)  # your harness
+        episodes.append(
+            Episode(task.id, reply=reply, actions=env.log, cost_usd=env.cost, latency_s=env.seconds)
+        )
     return episodes
 
-episodes = run(USECASE, {"agent": my_agent, "workflow": my_workflow},
-               trials=10, frozen={"model": "provider/model-id", "temperature": 0})
+
+episodes = run(
+    USECASE,
+    {"agent": my_agent, "workflow": my_workflow},
+    trials=10,
+    frozen={"model": "provider/model-id", "temperature": 0},
+)
 ```
 
 `did`, `never`, `at_most`, `says`, `never_says`, `ended`, `state` and `judged` cover the

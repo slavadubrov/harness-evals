@@ -223,3 +223,36 @@ def test_the_example_runs_offline():
         [sys.executable, str(example)], capture_output=True, text=True, check=True
     ).stdout
     assert "| agent |" in out and "Decision:" in out
+
+
+def test_two_versions_of_one_harness_keep_both_summaries():
+    uc, base = grades_for({"a": [True, False]}, "same")
+    _, cand = grades_for({"a": [True, True]}, "same")
+    assert set(compare(uc, base, cand).summaries) == {"same (base)", "same (candidate)"}
+
+
+def test_the_cli_summarizes_and_compares_saved_episodes(tmp_path, capsys, monkeypatch):
+    from harness_evals.cli import main
+
+    example = Path(__file__).parents[1] / "examples"
+    monkeypatch.syspath_prepend(str(example))
+    import refund_desk
+
+    eps = run(
+        refund_desk.USECASE,
+        {
+            "agent": refund_desk.adapter(refund_desk.agent),
+            "workflow": refund_desk.adapter(refund_desk.workflow),
+        },
+        trials=3,
+        frozen={"model": "simulated"},
+        out=tmp_path,
+    )
+    assert len(eps) == 30
+    path = str(tmp_path / "episodes.jsonl")
+    main(["summarize", path, "--usecase", "refund_desk:USECASE"])
+    main(
+        ["compare", path, "--usecase", "refund_desk", "--base", "agent", "--candidate", "workflow"]
+    )
+    out = capsys.readouterr().out
+    assert "| workflow |" in out and "Decision:" in out
