@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Evaluate an agent harness or workflow with the model held fixed: use-case tasks, repeated trials, hard checks, paired comparisons."
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = []
 
 [project.scripts]
@@ -25,7 +25,7 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]

@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import operator
 import statistics
+from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from math import isfinite
 from typing import Any
 
 from harness_evals.core import Grade
@@ -53,10 +55,16 @@ def compare(
 ) -> Comparison:
     """Pair the harnesses task by task: both ran the same tasks, so per-task differences
     cancel the variation that comes from task difficulty."""
+    for grades in (base, candidate):
+        if len({g.episode.harness for g in grades}) != 1:
+            raise ValueError("each comparison input must contain exactly one harness")
+        trials = [(g.episode.task_id, g.episode.trial) for g in grades]
+        if len(trials) != len(set(trials)):
+            raise ValueError("comparison input contains duplicate task trials")
+    if Counter(g.episode.task_id for g in base) != Counter(g.episode.task_id for g in candidate):
+        raise ValueError("the harnesses must run the same tasks and number of trials per task")
     rb, rc = task_rates(base), task_rates(candidate)
-    shared = sorted(rb.keys() & rc.keys())
-    if not shared:
-        raise ValueError("the harnesses share no tasks")
+    shared = sorted(rb)
     d = [rc[t] - rb[t] for t in shared]
     names = (base[0].episode.harness or "base", candidate[0].episode.harness or "candidate")
     if names[0] == names[1]:  # two versions of one harness
@@ -81,6 +89,8 @@ def decide(
     usecase: UseCase, sb: dict[str, Any], sc: dict[str, Any], ci: tuple[float, float]
 ) -> tuple[str, list[str]]:
     """The adoption rule. Without clear evidence for the candidate, keep the base."""
+    if not isfinite(usecase.margin) or usecase.margin < 0:
+        raise ValueError("margin must be finite and nonnegative")
     if missed := gate_failures(sc, usecase.gates):
         return "reject", missed
     if sc["violations"] > sb["violations"]:
@@ -94,8 +104,14 @@ def decide(
     if lo > 0:
         return "adopt", [f"success is higher: {lo:+.3f} to {hi:+.3f}"]
     cb, cc = sb["cost_per_task"], sc["cost_per_task"]
-    if m > 0 and lo > -m and cb is not None and cc is not None and cc < cb:
+    if (
+        lo >= -m
+        and not (sb.get("unknown_cost") or sc.get("unknown_cost"))
+        and cb is not None
+        and cc is not None
+        and cc < cb
+    ):
         return "adopt", [f"no worse than -{m:g} ({lo:+.3f} to {hi:+.3f}) and cheaper per task"]
     return "inconclusive", [
-        f"success difference {lo:+.3f} to {hi:+.3f} includes no change; keep the base"
+        f"success difference {lo:+.3f} to {hi:+.3f} does not establish a benefit; keep the base"
     ]

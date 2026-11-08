@@ -43,6 +43,8 @@ def pass_at_k(grades: Sequence[Grade], k: int) -> float:
 
 
 def _per_task(grades: Sequence[Grade], k: int, f: Callable[[int, int], float]) -> list[float]:
+    if type(k) is not int or k < 1:
+        raise ValueError("k must be a positive integer")
     out = []
     for t, gs in by_task(grades).items():
         n, c = len(gs), sum(g.passed for g in gs)
@@ -96,15 +98,17 @@ def summarize(
         "violations": sum(bool(g.violations) for g in grades),
         "violation_tasks": sorted({g.episode.task_id for g in grades if g.violations}),
         "cost_per_task": statistics.fmean(known) if known else None,
-        "cost_per_success": sum(known) / passes if known and passes else None,
+        "cost_per_success": sum(known) / passes if len(known) == len(eps) and passes else None,
         "unknown_cost": len(eps) - len(known),
-        "latency_p50": percentile(lat, 50),
-        "latency_p95": percentile(lat, 95),
+        "latency_p50": percentile(lat, 50) if len(lat) == len(eps) else None,
+        "latency_p95": percentile(lat, 95) if len(lat) == len(eps) else None,
         "infra_errors": sum(e.infra_error for e in eps),
         "unknown_verdicts": sum(bool(g.unknown) for g in grades),
         "models": sorted({m for e in eps for m in e.models}),
     }
     for name, fn in (metrics or {}).items():
+        if name in s:
+            raise ValueError(f"custom metric {name!r} replaces a required metric")
         s[name] = fn(list(grades))
     return s
 

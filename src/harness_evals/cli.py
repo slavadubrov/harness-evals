@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import json
 from collections import defaultdict
 from pathlib import Path
 
 from harness_evals.compare import compare
 from harness_evals.metrics import summarize
 from harness_evals.report import comparison, table
-from harness_evals.runner import load
+from harness_evals.runner import comparable, fingerprint, load
 from harness_evals.usecase import UseCase
 
 
@@ -33,7 +34,31 @@ def main(argv: list[str] | None = None) -> None:
 
     uc = _usecase(a.usecase)
     grades = defaultdict(list)
+    reference = None
     for path in a.episodes:
+        manifest_path = path.with_name("manifest.json")
+        if manifest_path.exists():
+            try:
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                if not isinstance(manifest, dict):
+                    raise ValueError("manifest must be a JSON object")
+                comparable(
+                    manifest,
+                    {
+                        "usecase": uc.name,
+                        "usecase_version": uc.version,
+                        "fingerprint": fingerprint(uc.split(manifest.get("split"))),
+                        "split": manifest.get("split"),
+                        "frozen": manifest.get("frozen"),
+                    },
+                )
+                if reference is not None:
+                    comparable(reference, manifest)
+            except (OSError, ValueError) as exc:
+                raise SystemExit(f"invalid manifest: {exc}") from None
+            reference = manifest
+        elif a.command == "compare":
+            raise SystemExit("compare requires manifest.json next to each episodes file")
         for g in uc.grade(load(path)):
             grades[g.episode.harness].append(g)
     if a.command == "summarize":
