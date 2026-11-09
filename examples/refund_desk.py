@@ -33,7 +33,7 @@ from harness_evals import (
     says,
     summarize,
 )
-from harness_evals.report import comparison, frontier_svg, table
+from harness_evals.report import comparison, failure_map_svg, frontier_svg, table
 
 ORDERS = {  # order id -> (owner, days since delivery, amount in cents)
     "A1": ("ana", 3, 4800),
@@ -139,5 +139,7 @@ if __name__ == "__main__":
     print("Frontier, success against cost:", pareto(summaries, "cost_per_task", "success"))
     print()
     print(comparison(compare(USECASE, by["agent"], by["workflow"])))
-    if len(sys.argv) > 1:  # python examples/refund_desk.py frontier.svg
+    if len(sys.argv) > 1:  # python examples/refund_desk.py frontier.svg failures.svg
         Path(sys.argv[1]).write_text(frontier_svg(summaries, "cost_per_task", "success"))
+    if len(sys.argv) > 2:
+        Path(sys.argv[2]).write_text(failure_map_svg(USECASE, by))

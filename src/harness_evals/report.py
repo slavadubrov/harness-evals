@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from html import escape
 from math import floor, log10
 from typing import Any
 
 from harness_evals.compare import Comparison
+from harness_evals.core import Grade
 from harness_evals.metrics import pareto
+from harness_evals.usecase import UseCase
 
 REQUIRED = [
     ("success", "Success"),
@@ -181,3 +183,149 @@ def _tick(v: float, span: float) -> str:
     step = span / 5  # the fewest decimals that show every tick exactly
     decimals = next((d for d in range(7) if abs(round(step, d) - step) < 1e-9 * step), 6)
     return f"{v:.{decimals}f}"
+
+
+def check_kind(name: str) -> str:
+    """The column a check falls in: its name without arguments, so "did refund(order='A1')"
+    and "did refund(order='B1')" share the column "did refund"."""
+    return name.split("(", 1)[0].strip()
+
+
+def failure_map_svg(
+    usecase: UseCase,
+    grades: Mapping[str, Sequence[Grade]],
+    *,
+    by: str = "checks",
+    group: Callable[[str], str] = check_kind,
+    title: str = "",
+) -> str:
+    """Where each harness fails: one row per task and, in a panel per harness, one column
+    per kind of check (``by="checks"``) or per run (``by="runs"``). A cell shows the share
+    of the task's runs that failed there; hovering over it gives the count."""
+    if by not in ("checks", "runs"):
+        raise ValueError("by must be 'checks' or 'runs'")
+    graded = {g.episode.task_id for gs in grades.values() for g in gs}
+    tasks = [t for t in usecase.tasks if t.id in graded]
+    if not tasks:
+        raise ValueError("no graded runs of the use case's tasks")
+    cols, cells = _failure_cells(tasks, grades, by, group)
+
+    size, pitch, char = 13, 16, 7.2  # cell, grid step, width of a 13px character
+    label_w = 16 + char * min(44, max(len(t.id) for t in tasks))
+    head = 28 + (char * max(map(len, cols)) if by == "checks" else 14)  # labels stand upright
+    panel_w = {h: max(len(cols) * pitch, char * len(h)) + 28 for h in grades}
+    top = 78 + head
+    legend_w = 16 + 5 * (size + 22) + 6.6 * len("every run passedsome runs failedevery run failed")
+    legend_w += 6.6 * len("undecidednot checked on this task")
+    width = max(label_w + sum(panel_w.values()) + 16, legend_w)
+    height = top + len(tasks) * pitch + 24
+    red, green, grey, pink = "#c2185b", "#2e7d32", "#9e9e9e", "#fce4ec"
+    title = title or f"Where each harness fails, by {'check' if by == 'checks' else 'run'}"
+
+    def box(x: float, y: float, fill: str, inner: str = "", stroke: str = "none") -> str:
+        attrs = f'x="{x:.1f}" y="{y:.1f}" width="{size}" height="{size}" rx="2"'
+        return f'<rect {attrs} fill="{fill}" stroke="{stroke}">{inner}</rect>'
+
+    def dot(x: float, y: float) -> str:
+        return f'<circle cx="{x + size / 2:.1f}" cy="{y + size / 2:.1f}" r="1.6" fill="{grey}"/>'
+
+    o = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width:.0f} {height:.0f}" '
+        f'role="img" font-family="system-ui, sans-serif" font-size="13" fill="#222">',
+        f"<title>{escape(title)}</title>",
+        f'<rect width="{width:.0f}" height="{height:.0f}" fill="#fff"/>',
+        f'<text x="16" y="26" font-size="15" font-weight="600">{escape(title)}</text>',
+    ]
+    half = f'<rect y="{size / 2}" width="{size}" height="{size / 2}" fill="{red}"/>'
+    legend = [
+        (box(0, 0, green), "every run passed"),
+        (box(0, 0, pink, stroke=red) + half, "some runs failed"),
+        (box(0, 0, red), "every run failed"),
+        (box(0, 0, grey), "undecided"),
+        (dot(0, 0), "not checked on this task"),
+    ]
+    if by == "runs":
+        legend = [(box(0, 0, green), "passed"), (box(0, 0, red), "failed"), legend[3]]
+    x = 16.0
+    for glyph, text in legend:
+        o.append(f'<g transform="translate({x:.0f} 42)">{glyph}</g>')
+        o.append(f'<text x="{x + size + 6:.0f}" y="53" fill="#555">{text}</text>')
+        x += size + 22 + 6.6 * len(text)
+    for i, t in enumerate(tasks):
+        name = t.id if len(t.id) <= 44 else t.id[:43] + "…"
+        y = top + i * pitch + 11
+        o.append(f'<text x="{label_w - 10:.0f}" y="{y}" text-anchor="end">{escape(name)}</text>')
+    x0 = label_w
+    for h in grades:
+        o.append(f'<text x="{x0:.0f}" y="90" font-weight="600">{escape(h)}</text>')
+        for j, c in enumerate(cols):
+            cx = x0 + j * pitch + size / 2
+            at = (
+                f'transform="translate({cx + 4:.1f} {top - 6:.0f}) rotate(-90)"'
+                if by == "checks"
+                else f'x="{cx:.1f}" y="{top - 6:.0f}" text-anchor="middle"'
+            )
+            o.append(f'<text {at} fill="#555">{escape(c)}</text>')
+        for i, t in enumerate(tasks):
+            for j, c in enumerate(cols):
+                x, y = x0 + j * pitch, top + i * pitch
+                v = cells[h, t.id, c]
+                if v is None:
+                    o.append(dot(x, y))
+                if not v or not v[2]:
+                    continue
+                bad, unsure, n = v
+                tip = f"<title>{escape(f'{h} · {t.id} · {c}: {bad} of {n} runs failed')}</title>"
+                if 0 < bad < n:  # the failed share fills the cell from the bottom
+                    bar = size * bad / n
+                    part = (
+                        f'<rect x="{x}" y="{y + size - bar:.1f}" width="{size}" height="{bar:.1f}"'
+                    )
+                    o.append(f'<g>{box(x, y, pink, stroke=red)}{part} fill="{red}"/>{tip}</g>')
+                else:
+                    o.append(box(x, y, red if bad else grey if unsure else green, tip))
+        x0 += panel_w[h]
+    o.append("</svg>")
+    return "\n".join(o) + "\n"
+
+
+def _failure_cells(
+    tasks: Sequence[Any],
+    grades: Mapping[str, Sequence[Grade]],
+    by: str,
+    group: Callable[[str], str],
+) -> tuple[list[str], dict[tuple[str, str, str], tuple[int, int, int] | None]]:
+    """The columns, and (failed, undecided, runs) for every cell; None where a check does
+    not apply to the task."""
+    runs = {
+        (h, t.id): [g for g in gs if g.episode.task_id == t.id]
+        for h, gs in grades.items()
+        for t in tasks
+    }
+    cells: dict[tuple[str, str, str], tuple[int, int, int] | None] = {}
+    if by == "runs":
+        trials = max(g.episode.trial for v in runs.values() for g in v) + 1
+        cols = [str(i + 1) for i in range(trials)]
+        for (h, task), gs in runs.items():
+            for i, c in enumerate(cols):
+                mine = [g for g in gs if g.episode.trial == i]
+                bad = sum(bool(g.failed) for g in mine)
+                unsure = sum(bool(g.unknown and not g.failed) for g in mine)
+                cells[h, task, c] = (bad, unsure, len(mine))
+        return cols, cells
+    cols = list(dict.fromkeys(group(c.name) for t in tasks for c in t.checks))
+    if any("no run error" in g.failed for v in runs.values() for g in v):
+        cols.append("no run error")
+    applies = {t.id: {group(c.name) for c in t.checks} | {"no run error"} for t in tasks}
+    for (h, task), gs in runs.items():
+        for c in cols:
+            if c not in applies[task]:
+                cells[h, task, c] = None
+                continue
+            bad = [any(group(f) == c for f in g.failed) for g in gs]
+            unsure = [
+                not b and any(group(u) == c for u in g.unknown)
+                for g, b in zip(gs, bad, strict=True)
+            ]
+            cells[h, task, c] = (sum(bad), sum(unsure), len(gs))
+    return cols, cells
