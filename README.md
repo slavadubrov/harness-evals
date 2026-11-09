@@ -15,6 +15,8 @@ no agent.
 - It does not call models or run your harness. Your adapter does that; the library
   grades what the adapter observed.
 
+![harness-evals at a glance: you bring a use case, harnesses behind adapters and a frozen setup; harness-evals runs, grades, summarizes and compares them; you get saved runs, metrics with intervals and a decision](docs/overview.svg)
+
 ## Install
 
 ```bash
@@ -30,6 +32,8 @@ does the opposite: the model, its endpoint and settings, the tasks and the check
 fixed, and only the harness changes. Then a difference in the results belongs to the
 harness.
 
+![A model benchmark holds the tasks, checks and harness fixed and swaps the model; a harness evaluation holds the tasks, checks, model and settings fixed and swaps only the harness](docs/idea.svg)
+
 | Part | What it is | Where |
 | --- | --- | --- |
 | `UseCase` | The tasks a harness is built for, the bar it must clear (`gates`) and any use-case metrics | `usecase.py` |
@@ -40,6 +44,8 @@ harness.
 | `run` | Runs every harness `trials` times, rotates their execution order and writes a manifest of what was held fixed | `runner.py` |
 | `summarize`, `compare` | The metrics below, and a paired comparison with an adoption decision | `metrics.py`, `compare.py` |
 | `agreement` | How often a grader agrees with labels a person wrote | `calibrate.py` |
+
+![C4 component view of the harness_evals package: the public API and CLI on top, runner, compare, report and calibrate in the middle, usecase and metrics below, core at the base; your script, your adapters and the runs folder around it](docs/components.svg)
 
 ## A task and an adapter
 
@@ -88,6 +94,8 @@ episode. Duplicate or unrequested episodes raise an error. Missing episodes and 
 exceptions become infrastructure failures; an exception marks every task in that batch
 as failed with unknown cost. `trials` must be a positive integer.
 
+![Sequence diagram of run(): it checks the frozen setup and builds a manifest, then for each trial calls every adapter in rotating order with a deep copy of the tasks; missing episodes and adapter exceptions become infra errors, and the runs are saved](docs/run-sequence.svg)
+
 [`examples/refund_desk.py`](examples/refund_desk.py) runs offline in a second. Its
 "agent" is a simulated model with seeded mistakes, so its numbers describe the
 simulation only:
@@ -102,7 +110,13 @@ simulation only:
 Decision: **adopt**. the base misses the bar: violations = 2, needs <= 0
 ```
 
+## Use cases
+
+![Six use cases with code: agent or workflow, did my change help, can it be cheaper, compare saved runs from the CLI, can I trust the judge, where does it break](docs/use-cases.svg)
+
 ## Metrics
+
+![Grading one episode into a grade, then summarizing many: pass and fail grids for the agent and the workflow from the example, with success, pass^k and violations](docs/grading.svg)
 
 `summarize` always reports these:
 
@@ -130,6 +144,8 @@ the same number of trials per task, without duplicate task/trial pairs. It decid
 3. **reject** if the interval of the success difference lies below `-margin`;
 4. **adopt** if it lies above 0, or if its lower bound is at least `-margin` and the candidate is cheaper;
 5. otherwise **inconclusive**: keep the base, and add tasks or runs.
+
+![The adoption rule as six questions asked in order, each with a reject or adopt exit and inconclusive at the end, beside a number line showing how the success interval is read](docs/adoption-rule.svg)
 
 A cost gate fails while any run's cost is unknown, and a gate on a metric that could not
 be computed fails too. A cheaper-candidate decision requires complete costs for both

@@ -1,0 +1,275 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="796" viewBox="0 0 960 796" role="img" aria-labelledby="title desc">
+<title id="title">What happens inside run()</title>
+<desc id="desc">Sequence diagram. Your script calls run(usecase, harnesses, trials=10, frozen=...). run refuses to start unless frozen names a model, trials is at least 1 and the split has tasks, then writes a manifest. For each trial the first harness rotates; run calls each adapter with a deep copy of the tasks; your harness runs each task on the frozen model and the environment records actions, cost and latency; the adapter returns one Episode per task. Missing episodes become infra errors, duplicates raise, and an adapter exception marks every task in that batch as an infra error. Episodes and the manifest are saved, and run returns 100 episodes: 10 trials, 2 harnesses, 5 tasks.</desc>
+<style>
+:root {
+  --bg: #f6f8fa;
+  --panel: #ffffff;
+  --border: #d8dee4;
+  --hair: #eaeef2;
+  --dot: #d8dee4;
+  --t1: #1f2328;
+  --t2: #59636e;
+  --t3: #818b98;
+  --line: #9aa4af;
+  --code: #f3f5f8;
+  --shadow: 0.07;
+  --blue: #2f6fe4;
+  --blue-fill: #eaf1fe;
+  --blue-border: #b3cdfb;
+  --blue-text: #1f56c4;
+  --violet: #8250df;
+  --violet-fill: #f4effe;
+  --violet-border: #d3c1fa;
+  --violet-text: #6639ba;
+  --teal: #0e9384;
+  --teal-fill: #e4f6f3;
+  --teal-border: #97dbd1;
+  --teal-text: #0a6b61;
+  --green: #1f883d;
+  --green-fill: #e7f6eb;
+  --green-border: #a3dbb0;
+  --green-text: #116329;
+  --rose: #d1242f;
+  --rose-fill: #fdedef;
+  --rose-border: #f5b0b6;
+  --rose-text: #a40e26;
+  --amber: #b7791f;
+  --amber-fill: #fef6dc;
+  --amber-border: #f0d58a;
+  --amber-text: #7d4e00;
+  --slate: #59636e;
+  --slate-fill: #f0f2f5;
+  --slate-border: #d0d7de;
+  --slate-text: #424a53;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg: #0d1117;
+  --panel: #161b22;
+  --border: #30363d;
+  --hair: #21262d;
+  --dot: #21262d;
+  --t1: #e6edf3;
+  --t2: #9198a1;
+  --t3: #6e7681;
+  --line: #6e7681;
+  --code: #0d1117;
+  --shadow: 0;
+  --blue: #58a6ff;
+  --blue-fill: rgba(56,139,253,0.13);
+  --blue-border: rgba(56,139,253,0.45);
+  --blue-text: #9ecbff;
+  --violet: #bc8cff;
+  --violet-fill: rgba(163,113,247,0.14);
+  --violet-border: rgba(163,113,247,0.5);
+  --violet-text: #d2b8ff;
+  --teal: #2dd4bf;
+  --teal-fill: rgba(45,212,191,0.11);
+  --teal-border: rgba(45,212,191,0.42);
+  --teal-text: #86ecdd;
+  --green: #3fb950;
+  --green-fill: rgba(46,160,67,0.15);
+  --green-border: rgba(63,185,80,0.5);
+  --green-text: #7ee391;
+  --rose: #f85149;
+  --rose-fill: rgba(248,81,73,0.13);
+  --rose-border: rgba(248,81,73,0.5);
+  --rose-text: #ffa198;
+  --amber: #d29922;
+  --amber-fill: rgba(187,128,9,0.15);
+  --amber-border: rgba(210,153,34,0.5);
+  --amber-text: #f2cc60;
+  --slate: #8b949e;
+  --slate-fill: rgba(110,118,129,0.14);
+  --slate-border: rgba(110,118,129,0.45);
+  --slate-text: #c9d1d9;
+} }
+text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif; fill: var(--t2); }
+.bg { fill: var(--bg); stroke: var(--border); }
+.dots { fill: var(--dot); }
+.panel { fill: var(--panel); stroke: var(--border); }
+.code { fill: var(--code); stroke: var(--hair); }
+.hair { stroke: var(--hair); fill: none; }
+.line { stroke: var(--line); fill: none; }
+.mk { fill: var(--line); }
+.eyebrow { font-size: 11.5px; font-weight: 700; letter-spacing: 0.12em; }
+.h1 { font-size: 24px; font-weight: 700; fill: var(--t1); letter-spacing: -0.01em; }
+.sub { font-size: 14px; fill: var(--t2); }
+.h2 { font-size: 15px; font-weight: 650; fill: var(--t1); }
+.h3 { font-size: 13px; font-weight: 600; fill: var(--t1); }
+.b { font-size: 12.5px; fill: var(--t2); }
+.s { font-size: 11.5px; fill: var(--t3); }
+.cap { font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; fill: var(--t3); }
+.m { font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace; font-size: 12px; fill: var(--t1); }
+.ms { font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace; font-size: 11px; fill: var(--t2); }
+.t1 { fill: var(--t1); } .t2 { fill: var(--t2); } .t3 { fill: var(--t3); }
+.bold { font-weight: 700; } .semi { font-weight: 600; }
+.halo { paint-order: stroke; stroke: var(--bg); stroke-width: 5px; stroke-linejoin: round; }
+.halo-p { paint-order: stroke; stroke: var(--panel); stroke-width: 5px; stroke-linejoin: round; }
+.sh { filter: url(#sh); }
+.f-blue { fill: var(--blue-fill); stroke: var(--blue-border); }
+.x-blue { fill: var(--blue-text); }
+.k-blue { fill: var(--blue); }
+.s-blue { stroke: var(--blue); }
+.i-blue { color: var(--blue); }
+.f-violet { fill: var(--violet-fill); stroke: var(--violet-border); }
+.x-violet { fill: var(--violet-text); }
+.k-violet { fill: var(--violet); }
+.s-violet { stroke: var(--violet); }
+.i-violet { color: var(--violet); }
+.f-teal { fill: var(--teal-fill); stroke: var(--teal-border); }
+.x-teal { fill: var(--teal-text); }
+.k-teal { fill: var(--teal); }
+.s-teal { stroke: var(--teal); }
+.i-teal { color: var(--teal); }
+.f-green { fill: var(--green-fill); stroke: var(--green-border); }
+.x-green { fill: var(--green-text); }
+.k-green { fill: var(--green); }
+.s-green { stroke: var(--green); }
+.i-green { color: var(--green); }
+.f-rose { fill: var(--rose-fill); stroke: var(--rose-border); }
+.x-rose { fill: var(--rose-text); }
+.k-rose { fill: var(--rose); }
+.s-rose { stroke: var(--rose); }
+.i-rose { color: var(--rose); }
+.f-amber { fill: var(--amber-fill); stroke: var(--amber-border); }
+.x-amber { fill: var(--amber-text); }
+.k-amber { fill: var(--amber); }
+.s-amber { stroke: var(--amber); }
+.i-amber { color: var(--amber); }
+.f-slate { fill: var(--slate-fill); stroke: var(--slate-border); }
+.x-slate { fill: var(--slate-text); }
+.k-slate { fill: var(--slate); }
+.s-slate { stroke: var(--slate); }
+.i-slate { color: var(--slate); }
+</style>
+<defs>
+<filter id="sh" x="-10%" y="-10%" width="120%" height="140%">
+  <feDropShadow dx="0" dy="1.5" stdDeviation="2" style="flood-color: #1f2328; flood-opacity: var(--shadow)"/>
+</filter>
+<pattern id="dotgrid" width="18" height="18" patternUnits="userSpaceOnUse">
+  <circle cx="1.5" cy="1.5" r="1.1" class="dots"/>
+</pattern>
+<linearGradient id="brand" x1="0" x2="1" y1="0" y2="0">
+  <stop offset="0" style="stop-color: var(--blue)"/>
+  <stop offset="0.5" style="stop-color: var(--violet)"/>
+  <stop offset="1" style="stop-color: var(--teal)"/>
+</linearGradient>
+<marker id="a-line" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="mk"/></marker>
+<marker id="a-blue" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-blue"/></marker>
+<marker id="a-violet" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-violet"/></marker>
+<marker id="a-teal" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-teal"/></marker>
+<marker id="a-green" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-green"/></marker>
+<marker id="a-rose" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-rose"/></marker>
+<marker id="a-amber" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-amber"/></marker>
+<marker id="a-slate" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-slate"/></marker>
+<symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.7 18-8-14a2 2 0 0 0-3.5 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+<symbol id="i-bot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></symbol>
+<symbol id="i-flow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+<symbol id="i-package" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></symbol>
+<symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></symbol>
+</defs>
+<rect x="0.5" y="0.5" width="959" height="795" rx="16" class="bg"/>
+<rect x="0.5" y="0.5" width="959" height="795" rx="16" fill="url(#dotgrid)" opacity="0.55"/>
+<clipPath id="card"><rect x="0.5" y="0.5" width="959" height="795" rx="16"/></clipPath>
+<rect x="0" y="0" width="960" height="4" fill="url(#brand)" clip-path="url(#card)"/>
+<text x="40" y="42" class="eyebrow x-teal">INSIDE RUN() · SEQUENCE</text>
+<text x="40" y="72" class="h1">What happens when you call run()</text>
+<text x="40" y="97" class="sub">Every harness gets the same tasks k times. What goes wrong is recorded, never dropped.</text>
+<rect x="40" y="124" width="128" height="46" rx="10" class="panel sh"/>
+<rect x="40" y="124" width="128" height="46" rx="10" class="" style="fill: none; stroke: var(--violet-border)"/>
+<rect x="50" y="133" width="28" height="28" rx="7.8" class="f-violet"/><use href="#i-user" x="56.2" y="139.2" width="15.7" height="15.7" class="i-violet"/>
+<text x="86" y="145" class="h3">Your script</text>
+<text x="86" y="161" class="s">calls run()</text>
+<path d="M104 170 V756" class="line" fill="none" stroke-width="1" stroke-dasharray="3 4" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--border)"/>
+<rect x="218" y="124" width="144" height="46" rx="10" class="panel sh"/>
+<rect x="218" y="124" width="144" height="46" rx="10" class="" style="fill: none; stroke: var(--teal-border)"/>
+<rect x="228" y="133" width="28" height="28" rx="7.8" class="f-teal"/><use href="#i-package" x="234.2" y="139.2" width="15.7" height="15.7" class="i-teal"/>
+<text x="264" y="145" class="h3">run()</text>
+<text x="264" y="161" class="s">harness-evals</text>
+<path d="M290 170 V756" class="line" fill="none" stroke-width="1" stroke-dasharray="3 4" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--border)"/>
+<rect x="468" y="124" width="144" height="46" rx="10" class="panel sh"/>
+<rect x="468" y="124" width="144" height="46" rx="10" class="" style="fill: none; stroke: var(--violet-border)"/>
+<rect x="478" y="133" width="28" height="28" rx="7.8" class="f-violet"/><use href="#i-bot" x="484.2" y="139.2" width="15.7" height="15.7" class="i-violet"/>
+<text x="514" y="145" class="h3">agent</text>
+<text x="514" y="161" class="s">your adapter</text>
+<path d="M540 170 V756" class="line" fill="none" stroke-width="1" stroke-dasharray="3 4" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--border)"/>
+<rect x="630" y="124" width="144" height="46" rx="10" class="panel sh"/>
+<rect x="630" y="124" width="144" height="46" rx="10" class="" style="fill: none; stroke: var(--violet-border)"/>
+<rect x="640" y="133" width="28" height="28" rx="7.8" class="f-violet"/><use href="#i-flow" x="646.2" y="139.2" width="15.7" height="15.7" class="i-violet"/>
+<text x="676" y="145" class="h3">workflow</text>
+<text x="676" y="161" class="s">your adapter</text>
+<path d="M702 170 V756" class="line" fill="none" stroke-width="1" stroke-dasharray="3 4" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--border)"/>
+<rect x="784" y="124" width="136" height="46" rx="10" class="panel sh"/>
+<rect x="784" y="124" width="136" height="46" rx="10" class="" style="fill: none; stroke: var(--blue-border)"/>
+<rect x="794" y="133" width="28" height="28" rx="7.8" class="f-blue"/><use href="#i-lock" x="800.2" y="139.2" width="15.7" height="15.7" class="i-blue"/>
+<text x="830" y="145" class="h3">model · env</text>
+<text x="830" y="161" class="s">frozen · logs</text>
+<path d="M852 170 V756" class="line" fill="none" stroke-width="1" stroke-dasharray="3 4" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--border)"/>
+<rect x="285" y="212" width="10" height="528" rx="3" class="f-teal"/>
+<rect x="535" y="392" width="10" height="82" rx="3" class="f-violet"/>
+<rect x="847" y="418" width="10" height="28" rx="3" class="f-blue"/>
+<rect x="697" y="592" width="10" height="28" rx="3" class="f-violet"/>
+<text x="197" y="188" class="ms t1 halo" text-anchor="middle">run(usecase, harnesses,</text>
+<path d="M109 212 H284" class="s-violet" fill="none" stroke-width="1.6" marker-end="url(#a-violet)" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="208.5" y="204" class="ms t1 halo" text-anchor="middle">trials=10, frozen=…)</text>
+<circle cx="122" cy="212" r="8" class="k-teal"/><text x="122" y="216" text-anchor="middle" class="bold" style="font-size:11.5px; fill: var(--panel)">1</text>
+<rect x="304" y="222" width="204" height="76" rx="8" class="f-teal"/>
+<text x="314" y="242" class="s t1">checks: frozen names a model,</text>
+<text x="314" y="257" class="s">trials ≥ 1, the split has tasks</text>
+<text x="314" y="272" class="s t1">builds the manifest: fingerprint,</text>
+<text x="314" y="287" class="s">frozen, split, harnesses, trials</text>
+<rect x="200" y="312" width="730" height="378" rx="10" class="" style="fill: none; stroke: var(--slate-border)" stroke-dasharray="5 4"/>
+<path d="M200 336 V322 Q200 312 210 312 H262 V328 L254 336 Z" class="f-slate" style="stroke: var(--slate-border)"/>
+<text x="210" y="328" class="cap x-slate">LOOP</text>
+<text x="306" y="330" class="s">for trial = 0 … k − 1, the first harness rotates:</text>
+<text x="306" y="355" class="s t3">trial 0</text>
+<rect x="346" y="342" width="48" height="18" rx="9" class="f-violet"/><text x="355" y="354.6" class="m x-violet" style="font-size:10px">agent</text>
+<text x="402" y="355" class="s t3" text-anchor="middle">→</text>
+<rect x="410" y="342" width="66" height="18" rx="9" class="f-violet"/><text x="419" y="354.6" class="m x-violet" style="font-size:10px">workflow</text>
+<text x="498" y="355" class="s t3">trial 1</text>
+<rect x="538" y="342" width="66" height="18" rx="9" class="f-violet"/><text x="547" y="354.6" class="m x-violet" style="font-size:10px">workflow</text>
+<text x="612" y="355" class="s t3" text-anchor="middle">→</text>
+<rect x="620" y="342" width="48" height="18" rx="9" class="f-violet"/><text x="629" y="354.6" class="m x-violet" style="font-size:10px">agent</text>
+<text x="690" y="355" class="s t3">trial 2</text>
+<rect x="730" y="342" width="48" height="18" rx="9" class="f-violet"/><text x="739" y="354.6" class="m x-violet" style="font-size:10px">agent</text>
+<text x="786" y="355" class="s t3" text-anchor="middle">→</text>
+<rect x="794" y="342" width="66" height="18" rx="9" class="f-violet"/><text x="803" y="354.6" class="m x-violet" style="font-size:10px">workflow</text>
+<text x="876" y="355" class="s t3">…</text>
+<path d="M295 392 H534" class="s-violet" fill="none" stroke-width="1.6" marker-end="url(#a-violet)" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="426.5" y="384" class="ms t1 halo" text-anchor="middle">adapter(deepcopy(tasks), trial)</text>
+<circle cx="308" cy="392" r="8" class="k-teal"/><text x="308" y="396" text-anchor="middle" class="bold" style="font-size:11.5px; fill: var(--panel)">2</text>
+<path d="M545 418 H846" class="s-blue" fill="none" stroke-width="1.6" marker-end="url(#a-blue)" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="707.5" y="410" class="s halo" text-anchor="middle">your harness runs each task</text>
+<circle cx="558" cy="418" r="8" class="k-teal"/><text x="558" y="422" text-anchor="middle" class="bold" style="font-size:11.5px; fill: var(--panel)">3</text>
+<path d="M847 446 H546" class="line" fill="none" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#a-line)" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="684.5" y="438" class="s halo" text-anchor="middle">recorded actions, cost, latency</text>
+<circle cx="834" cy="446" r="8" class="k-slate"/><text x="834" y="450" text-anchor="middle" class="bold" style="font-size:11.5px; fill: var(--panel)">4</text>
+<path d="M535 474 H296" class="line" fill="none" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#a-line)" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="403.5" y="466" class="ms halo" text-anchor="middle">[Episode] · one per task</text>
+<circle cx="522" cy="474" r="8" class="k-slate"/><text x="522" y="478" text-anchor="middle" class="bold" style="font-size:11.5px; fill: var(--panel)">5</text>
+<rect x="304" y="486" width="204" height="76" rx="8" class="f-teal"/>
+<text x="314" y="506" class="s t1">keeps exactly what it asked for:</text>
+<text x="314" y="521" class="s">no episode → infra error</text>
+<text x="314" y="536" class="s">duplicate or extra → ValueError</text>
+<text x="314" y="551" class="s">stamps harness and trial</text>
+<path d="M295 592 H696" class="s-violet" fill="none" stroke-width="1.6" marker-end="url(#a-violet)" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="507.5" y="584" class="ms t1 halo" text-anchor="middle">adapter(deepcopy(tasks), trial)</text>
+<circle cx="308" cy="592" r="8" class="k-teal"/><text x="308" y="596" text-anchor="middle" class="bold" style="font-size:11.5px; fill: var(--panel)">6</text>
+<path d="M697 620 H296" class="line" fill="none" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#a-line)" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="484.5" y="612" class="ms halo" text-anchor="middle">[Episode] · one per task</text>
+<circle cx="684" cy="620" r="8" class="k-slate"/><text x="684" y="624" text-anchor="middle" class="bold" style="font-size:11.5px; fill: var(--panel)">7</text>
+<text x="852" y="596" class="s" text-anchor="middle">same as</text>
+<text x="852" y="611" class="s" text-anchor="middle">steps 3 and 4</text>
+<rect x="304" y="636" width="610" height="38" rx="8" class="f-rose"/>
+<use href="#i-alert" x="316" y="646" width="18" height="18" class="i-rose"/>
+<text x="342" y="660" class="s"><tspan class="t1 semi">adapter raises</tspan><tspan class="t2"> → every task in that batch: </tspan><tspan class="x-rose">Episode(status="error", infra_error=True)</tspan></text>
+<rect x="304" y="704" width="270" height="46" rx="8" class="f-slate"/>
+<text x="314" y="724" class="ms t1">out=Path("runs/eval") →</text>
+<text x="314" y="739" class="s">episodes.jsonl (atomic) + manifest.json</text>
+<path d="M285 728 H110" class="line" fill="none" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#a-line)" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="185.5" y="720" class="ms halo" text-anchor="middle">list[Episode]</text>
+<circle cx="272" cy="728" r="8" class="k-slate"/><text x="272" y="732" text-anchor="middle" class="bold" style="font-size:11.5px; fill: var(--panel)">8</text>
+<text x="268" y="748" class="s" text-anchor="end">10 trials × 2 harnesses × 5 tasks</text>
+</svg>

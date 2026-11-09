@@ -1,0 +1,288 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="640" viewBox="0 0 960 640" role="img" aria-labelledby="title desc">
+<title id="title">harness-evals at a glance</title>
+<desc id="desc">You bring a use case (tasks, checks, gates), your harnesses behind adapters, and a frozen setup naming the model. harness-evals runs every harness for k trials, grades each run, summarizes success with an interval, pass^k, cost and latency, and compares two harnesses to decide: adopt, reject or inconclusive. Runs are saved as episodes.jsonl and manifest.json.</desc>
+<style>
+:root {
+  --bg: #f6f8fa;
+  --panel: #ffffff;
+  --border: #d8dee4;
+  --hair: #eaeef2;
+  --dot: #d8dee4;
+  --t1: #1f2328;
+  --t2: #59636e;
+  --t3: #818b98;
+  --line: #9aa4af;
+  --code: #f3f5f8;
+  --shadow: 0.07;
+  --blue: #2f6fe4;
+  --blue-fill: #eaf1fe;
+  --blue-border: #b3cdfb;
+  --blue-text: #1f56c4;
+  --violet: #8250df;
+  --violet-fill: #f4effe;
+  --violet-border: #d3c1fa;
+  --violet-text: #6639ba;
+  --teal: #0e9384;
+  --teal-fill: #e4f6f3;
+  --teal-border: #97dbd1;
+  --teal-text: #0a6b61;
+  --green: #1f883d;
+  --green-fill: #e7f6eb;
+  --green-border: #a3dbb0;
+  --green-text: #116329;
+  --rose: #d1242f;
+  --rose-fill: #fdedef;
+  --rose-border: #f5b0b6;
+  --rose-text: #a40e26;
+  --amber: #b7791f;
+  --amber-fill: #fef6dc;
+  --amber-border: #f0d58a;
+  --amber-text: #7d4e00;
+  --slate: #59636e;
+  --slate-fill: #f0f2f5;
+  --slate-border: #d0d7de;
+  --slate-text: #424a53;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg: #0d1117;
+  --panel: #161b22;
+  --border: #30363d;
+  --hair: #21262d;
+  --dot: #21262d;
+  --t1: #e6edf3;
+  --t2: #9198a1;
+  --t3: #6e7681;
+  --line: #6e7681;
+  --code: #0d1117;
+  --shadow: 0;
+  --blue: #58a6ff;
+  --blue-fill: rgba(56,139,253,0.13);
+  --blue-border: rgba(56,139,253,0.45);
+  --blue-text: #9ecbff;
+  --violet: #bc8cff;
+  --violet-fill: rgba(163,113,247,0.14);
+  --violet-border: rgba(163,113,247,0.5);
+  --violet-text: #d2b8ff;
+  --teal: #2dd4bf;
+  --teal-fill: rgba(45,212,191,0.11);
+  --teal-border: rgba(45,212,191,0.42);
+  --teal-text: #86ecdd;
+  --green: #3fb950;
+  --green-fill: rgba(46,160,67,0.15);
+  --green-border: rgba(63,185,80,0.5);
+  --green-text: #7ee391;
+  --rose: #f85149;
+  --rose-fill: rgba(248,81,73,0.13);
+  --rose-border: rgba(248,81,73,0.5);
+  --rose-text: #ffa198;
+  --amber: #d29922;
+  --amber-fill: rgba(187,128,9,0.15);
+  --amber-border: rgba(210,153,34,0.5);
+  --amber-text: #f2cc60;
+  --slate: #8b949e;
+  --slate-fill: rgba(110,118,129,0.14);
+  --slate-border: rgba(110,118,129,0.45);
+  --slate-text: #c9d1d9;
+} }
+text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif; fill: var(--t2); }
+.bg { fill: var(--bg); stroke: var(--border); }
+.dots { fill: var(--dot); }
+.panel { fill: var(--panel); stroke: var(--border); }
+.code { fill: var(--code); stroke: var(--hair); }
+.hair { stroke: var(--hair); fill: none; }
+.line { stroke: var(--line); fill: none; }
+.mk { fill: var(--line); }
+.eyebrow { font-size: 11.5px; font-weight: 700; letter-spacing: 0.12em; }
+.h1 { font-size: 24px; font-weight: 700; fill: var(--t1); letter-spacing: -0.01em; }
+.sub { font-size: 14px; fill: var(--t2); }
+.h2 { font-size: 15px; font-weight: 650; fill: var(--t1); }
+.h3 { font-size: 13px; font-weight: 600; fill: var(--t1); }
+.b { font-size: 12.5px; fill: var(--t2); }
+.s { font-size: 11.5px; fill: var(--t3); }
+.cap { font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; fill: var(--t3); }
+.m { font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace; font-size: 12px; fill: var(--t1); }
+.ms { font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace; font-size: 11px; fill: var(--t2); }
+.t1 { fill: var(--t1); } .t2 { fill: var(--t2); } .t3 { fill: var(--t3); }
+.bold { font-weight: 700; } .semi { font-weight: 600; }
+.halo { paint-order: stroke; stroke: var(--bg); stroke-width: 5px; stroke-linejoin: round; }
+.halo-p { paint-order: stroke; stroke: var(--panel); stroke-width: 5px; stroke-linejoin: round; }
+.sh { filter: url(#sh); }
+.f-blue { fill: var(--blue-fill); stroke: var(--blue-border); }
+.x-blue { fill: var(--blue-text); }
+.k-blue { fill: var(--blue); }
+.s-blue { stroke: var(--blue); }
+.i-blue { color: var(--blue); }
+.f-violet { fill: var(--violet-fill); stroke: var(--violet-border); }
+.x-violet { fill: var(--violet-text); }
+.k-violet { fill: var(--violet); }
+.s-violet { stroke: var(--violet); }
+.i-violet { color: var(--violet); }
+.f-teal { fill: var(--teal-fill); stroke: var(--teal-border); }
+.x-teal { fill: var(--teal-text); }
+.k-teal { fill: var(--teal); }
+.s-teal { stroke: var(--teal); }
+.i-teal { color: var(--teal); }
+.f-green { fill: var(--green-fill); stroke: var(--green-border); }
+.x-green { fill: var(--green-text); }
+.k-green { fill: var(--green); }
+.s-green { stroke: var(--green); }
+.i-green { color: var(--green); }
+.f-rose { fill: var(--rose-fill); stroke: var(--rose-border); }
+.x-rose { fill: var(--rose-text); }
+.k-rose { fill: var(--rose); }
+.s-rose { stroke: var(--rose); }
+.i-rose { color: var(--rose); }
+.f-amber { fill: var(--amber-fill); stroke: var(--amber-border); }
+.x-amber { fill: var(--amber-text); }
+.k-amber { fill: var(--amber); }
+.s-amber { stroke: var(--amber); }
+.i-amber { color: var(--amber); }
+.f-slate { fill: var(--slate-fill); stroke: var(--slate-border); }
+.x-slate { fill: var(--slate-text); }
+.k-slate { fill: var(--slate); }
+.s-slate { stroke: var(--slate); }
+.i-slate { color: var(--slate); }
+</style>
+<defs>
+<filter id="sh" x="-10%" y="-10%" width="120%" height="140%">
+  <feDropShadow dx="0" dy="1.5" stdDeviation="2" style="flood-color: #1f2328; flood-opacity: var(--shadow)"/>
+</filter>
+<pattern id="dotgrid" width="18" height="18" patternUnits="userSpaceOnUse">
+  <circle cx="1.5" cy="1.5" r="1.1" class="dots"/>
+</pattern>
+<linearGradient id="brand" x1="0" x2="1" y1="0" y2="0">
+  <stop offset="0" style="stop-color: var(--blue)"/>
+  <stop offset="0.5" style="stop-color: var(--violet)"/>
+  <stop offset="1" style="stop-color: var(--teal)"/>
+</linearGradient>
+<marker id="a-line" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="mk"/></marker>
+<marker id="a-blue" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-blue"/></marker>
+<marker id="a-violet" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-violet"/></marker>
+<marker id="a-teal" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-teal"/></marker>
+<marker id="a-green" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-green"/></marker>
+<marker id="a-rose" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-rose"/></marker>
+<marker id="a-amber" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-amber"/></marker>
+<marker id="a-slate" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-slate"/></marker>
+<symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.7 18-8-14a2 2 0 0 0-3.5 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+<symbol id="i-bot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></symbol>
+<symbol id="i-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="i-clipboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></symbol>
+<symbol id="i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></symbol>
+<symbol id="i-flag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/></symbol>
+<symbol id="i-flow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></symbol>
+<symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+<symbol id="i-package" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></symbol>
+<symbol id="i-plug" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></symbol>
+<symbol id="i-scale" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></symbol>
+</defs>
+<rect x="0.5" y="0.5" width="959" height="639" rx="16" class="bg"/>
+<rect x="0.5" y="0.5" width="959" height="639" rx="16" fill="url(#dotgrid)" opacity="0.55"/>
+<clipPath id="card"><rect x="0.5" y="0.5" width="959" height="639" rx="16"/></clipPath>
+<rect x="0" y="0" width="960" height="4" fill="url(#brand)" clip-path="url(#card)"/>
+<text x="40" y="42" class="eyebrow x-teal">HARNESS-EVALS · AT A GLANCE</text>
+<text x="40" y="72" class="h1">From a use case to a decision</text>
+<text x="40" y="97" class="sub">You bring tasks and harnesses. harness-evals runs them on one frozen setup and decides.</text>
+<text x="40" y="138" class="cap x-violet">YOU BRING</text>
+<text x="376" y="138" class="cap x-teal">HARNESS-EVALS DOES</text>
+<text x="618" y="138" class="cap x-green">YOU GET</text>
+<rect x="40" y="152" width="290" height="150" rx="12" class="panel sh"/>
+<rect x="56" y="168" width="30" height="30" rx="8.4" class="f-violet"/><use href="#i-clipboard" x="62.6" y="174.6" width="16.8" height="16.8" class="i-violet"/>
+<text x="98" y="181" class="h2">A use case</text>
+<text x="98" y="198" class="s">tasks, their checks, the bar to clear</text>
+<text x="56" y="229" class="s">tasks</text>
+<rect x="110" y="214" width="77.4" height="22" rx="11" class="f-slate"/><text x="119" y="229" class="m x-slate" style="font-size:11px">refund-ok</text>
+<rect x="193.4" y="214" width="90.6" height="22" rx="11" class="f-slate"/><text x="202.4" y="229" class="m x-slate" style="font-size:11px">refund-late</text>
+<rect x="290" y="214" width="24.6" height="22" rx="11" class="f-slate"/><text x="299" y="229" class="m x-slate" style="font-size:11px">…</text>
+<text x="56" y="257" class="s">checks</text>
+<rect x="110" y="242" width="51" height="22" rx="11" class="f-slate"/><text x="119" y="257" class="m x-slate" style="font-size:11px">did()</text>
+<rect x="167" y="242" width="80.2" height="22" rx="11" class="f-rose"/><use href="#i-alert" x="175" y="247" width="12" height="12" class="i-rose"/><text x="192" y="257" class="m x-rose" style="font-size:11px">never()</text>
+<rect x="253.2" y="242" width="57.6" height="22" rx="11" class="f-slate"/><text x="262.2" y="257" class="m x-slate" style="font-size:11px">says()</text>
+<text x="56" y="285" class="s">gates</text>
+<rect x="110" y="270" width="126.4" height="22" rx="11" class="f-amber"/><use href="#i-flag" x="118" y="275" width="12" height="12" class="i-amber"/><text x="135" y="285" class="m x-amber" style="font-size:11px">violations ≤ 0</text>
+<rect x="40" y="318" width="290" height="132" rx="12" class="panel sh"/>
+<rect x="56" y="334" width="30" height="30" rx="8.4" class="f-violet"/><use href="#i-plug" x="62.6" y="340.6" width="16.8" height="16.8" class="i-violet"/>
+<text x="98" y="347" class="h2">Your harnesses</text>
+<text x="98" y="364" class="s">each behind a short adapter</text>
+<rect x="56" y="380" width="65" height="22" rx="11" class="f-violet"/><use href="#i-bot" x="64" y="385.2" width="11.5" height="11.5" class="i-violet"/><text x="80.5" y="394.8" class="m x-violet" style="font-size:10.5px">agent</text>
+<rect x="127" y="380" width="83.9" height="22" rx="11" class="f-violet"/><use href="#i-flow" x="135" y="385.2" width="11.5" height="11.5" class="i-violet"/><text x="151.5" y="394.8" class="m x-violet" style="font-size:10.5px">workflow</text>
+<rect x="216.9" y="380" width="83.9" height="22" rx="11" class="f-violet"/><use href="#i-bot" x="224.9" y="385.2" width="11.5" height="11.5" class="i-violet"/><text x="241.4" y="394.8" class="m x-violet" style="font-size:10.5px">agent v2</text>
+<rect x="56" y="414" width="258" height="24" rx="6" class="code"/>
+<text x="66" y="430" class="m"><tspan class="t1">adapter</tspan><tspan class="t2">(tasks, trial) → </tspan><tspan class="x-violet">[Episode]</tspan></text>
+<rect x="40" y="466" width="290" height="110" rx="12" class="panel sh"/>
+<rect x="56" y="482" width="30" height="30" rx="8.4" class="f-blue"/><use href="#i-lock" x="62.6" y="488.6" width="16.8" height="16.8" class="i-blue"/>
+<text x="98" y="495" class="h2">A frozen setup</text>
+<text x="98" y="512" class="s">the same for every harness</text>
+<rect x="56" y="532" width="258" height="24" rx="6" class="code"/>
+<text x="66" y="548" class="m"><tspan class="t1">frozen</tspan><tspan class="t2">={</tspan><tspan class="x-blue">"model"</tspan><tspan class="t2">: </tspan><tspan class="x-blue">"provider/id"</tspan><tspan class="t2">}</tspan></text>
+<rect x="376" y="152" width="196" height="424" rx="12" class="panel sh"/>
+<path d="M376 212 V164 Q376 152 388 152 H560 Q572 152 572 164 V212 Z" class="f-teal" style="stroke: none"/>
+<rect x="376" y="152" width="196" height="424" rx="12" class="" style="fill: none; stroke: var(--teal-border)"/>
+<path d="M376 212 H572" class="line" fill="none" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--teal-border)"/>
+<rect x="390" y="167" width="30" height="30" rx="8.4" class="f-teal"/><use href="#i-package" x="396.6" y="173.6" width="16.8" height="16.8" class="i-teal"/>
+<text x="430" y="180" class="h2">harness-evals</text>
+<text x="430" y="196" class="s">standard library only</text>
+<path d="M402 266 V318" class="s-teal" fill="none" stroke-width="1.5" stroke-dasharray="2 4" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="402" cy="250" r="11" class="k-teal"/><text x="402" y="254" text-anchor="middle" class="bold" style="font-size:11.5px; fill: var(--panel)">1</text>
+<text x="422" y="255" class="m bold">run()</text>
+<text x="422" y="274" class="s">every harness, k trials,</text>
+<text x="422" y="289" class="s">in rotating order</text>
+<path d="M402 350 V402" class="s-teal" fill="none" stroke-width="1.5" stroke-dasharray="2 4" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="402" cy="334" r="11" class="k-teal"/><text x="402" y="338" text-anchor="middle" class="bold" style="font-size:11.5px; fill: var(--panel)">2</text>
+<text x="422" y="339" class="m bold">grade()</text>
+<text x="422" y="358" class="s">each check: pass, fail</text>
+<text x="422" y="373" class="s">or unknown, which fails</text>
+<path d="M402 434 V486" class="s-teal" fill="none" stroke-width="1.5" stroke-dasharray="2 4" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="402" cy="418" r="11" class="k-teal"/><text x="402" y="422" text-anchor="middle" class="bold" style="font-size:11.5px; fill: var(--panel)">3</text>
+<text x="422" y="423" class="m bold">summarize()</text>
+<text x="422" y="442" class="s">success ± interval,</text>
+<text x="422" y="457" class="s">pass^k, cost, latency</text>
+<circle cx="402" cy="502" r="11" class="k-teal"/><text x="402" y="506" text-anchor="middle" class="bold" style="font-size:11.5px; fill: var(--panel)">4</text>
+<text x="422" y="507" class="m bold">compare()</text>
+<text x="422" y="526" class="s">paired by task, then</text>
+<text x="422" y="541" class="s">the adoption rule</text>
+<rect x="618" y="152" width="302" height="104" rx="12" class="panel sh"/>
+<rect x="634" y="168" width="30" height="30" rx="8.4" class="f-slate"/><use href="#i-folder" x="640.6" y="174.6" width="16.8" height="16.8" class="i-slate"/>
+<text x="676" y="181" class="h2">Saved runs</text>
+<text x="676" y="198" class="s">what ran and what was held fixed</text>
+<rect x="634" y="216" width="126.4" height="22" rx="11" class="f-slate"/><use href="#i-file" x="642" y="221" width="12" height="12" class="i-slate"/><text x="659" y="231" class="m x-slate" style="font-size:11px">episodes.jsonl</text>
+<rect x="766.4" y="216" width="119.8" height="22" rx="11" class="f-slate"/><use href="#i-file" x="774.4" y="221" width="12" height="12" class="i-slate"/><text x="791.4" y="231" class="m x-slate" style="font-size:11px">manifest.json</text>
+<rect x="618" y="272" width="302" height="168" rx="12" class="panel sh"/>
+<rect x="634" y="288" width="30" height="30" rx="8.4" class="f-green"/><use href="#i-chart" x="640.6" y="294.6" width="16.8" height="16.8" class="i-green"/>
+<text x="676" y="301" class="h2">Metrics with intervals</text>
+<text x="676" y="318" class="s">per harness, over repeated runs</text>
+<text x="750" y="348" class="m bold x-violet">agent</text>
+<text x="828" y="348" class="m bold x-violet">workflow</text>
+<path d="M634 355.5 H904" class="line" fill="none" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--hair)"/>
+<text x="634" y="370" class="b">success</text>
+<text x="750" y="370" class="m t1">0.90</text>
+<text x="828" y="370" class="m t1">0.80</text>
+<path d="M634 375.5 H904" class="line" fill="none" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--hair)"/>
+<text x="634" y="390" class="b">95% interval</text>
+<text x="750" y="390" class="m t2">0.78–1.00</text>
+<text x="828" y="390" class="m t2">0.40–1.00</text>
+<path d="M634 395.5 H904" class="line" fill="none" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--hair)"/>
+<text x="634" y="410" class="b">pass^k, k = 10</text>
+<text x="750" y="410" class="m t1">0.60</text>
+<text x="828" y="410" class="m t1">0.80</text>
+<path d="M634 415.5 H904" class="line" fill="none" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--hair)"/>
+<text x="634" y="430" class="b">violations</text>
+<text x="750" y="430" class="m x-rose bold">2</text>
+<text x="828" y="430" class="m x-green bold">0</text>
+<rect x="618" y="456" width="302" height="120" rx="12" class="panel sh"/>
+<rect x="634" y="472" width="30" height="30" rx="8.4" class="f-green"/><use href="#i-scale" x="640.6" y="478.6" width="16.8" height="16.8" class="i-green"/>
+<text x="676" y="485" class="h2">A decision</text>
+<text x="676" y="502" class="s">adopt, reject or inconclusive</text>
+<rect x="634" y="516" width="157.8" height="28" rx="14" class="f-green"/><use href="#i-check" x="642" y="523.2" width="13.5" height="13.5" class="i-green"/><text x="660.5" y="534.5" class="b x-green bold" style="font-size:12.5px">ADOPT  workflow</text>
+<text x="634" y="562" class="s">agent misses the bar: violations = 2, needs ≤ 0</text>
+<path d="M336 227 H368" class="s-violet" fill="none" stroke-width="1.6" marker-end="url(#a-violet)" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M336 384 H368" class="s-violet" fill="none" stroke-width="1.6" marker-end="url(#a-violet)" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M336 521 H368" class="s-violet" fill="none" stroke-width="1.6" marker-end="url(#a-violet)" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M578 204 H610" class="s-teal" fill="none" stroke-width="1.6" marker-end="url(#a-teal)" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M578 356 H610" class="s-teal" fill="none" stroke-width="1.6" marker-end="url(#a-teal)" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M578 516 H610" class="s-teal" fill="none" stroke-width="1.6" marker-end="url(#a-teal)" stroke-linecap="round" stroke-linejoin="round"/>
+<use href="#i-info" x="40" y="597" width="16" height="16" class="i-slate"/>
+<text x="64" y="610" class="b"><tspan class="t1 semi">harness-evals never calls a model or runs your harness. </tspan><tspan class="t2">Your adapter does; the library grades what the adapter observed.</tspan></text>
+</svg>

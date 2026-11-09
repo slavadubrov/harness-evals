@@ -1,0 +1,267 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="716" viewBox="0 0 960 716" role="img" aria-labelledby="title desc">
+<title id="title">What you can use harness-evals for</title>
+<desc id="desc">Six use cases, each with code. 1: agent or workflow, run both and compare; in the refund-desk example the workflow is adopted because the agent broke the refund policy in 2 of 50 runs. 2: did a prompt or tool change help; compare two versions, inconclusive means keep the base and add tasks or runs. 3: a cheaper harness is adopted within a margin when every cost is known. 4: compare saved runs from the CLI; manifests must match. 5: calibrate an LLM judge against human labels with agreement(). 6: failures() counts failing checks per task to show which traces to read first.</desc>
+<style>
+:root {
+  --bg: #f6f8fa;
+  --panel: #ffffff;
+  --border: #d8dee4;
+  --hair: #eaeef2;
+  --dot: #d8dee4;
+  --t1: #1f2328;
+  --t2: #59636e;
+  --t3: #818b98;
+  --line: #9aa4af;
+  --code: #f3f5f8;
+  --shadow: 0.07;
+  --blue: #2f6fe4;
+  --blue-fill: #eaf1fe;
+  --blue-border: #b3cdfb;
+  --blue-text: #1f56c4;
+  --violet: #8250df;
+  --violet-fill: #f4effe;
+  --violet-border: #d3c1fa;
+  --violet-text: #6639ba;
+  --teal: #0e9384;
+  --teal-fill: #e4f6f3;
+  --teal-border: #97dbd1;
+  --teal-text: #0a6b61;
+  --green: #1f883d;
+  --green-fill: #e7f6eb;
+  --green-border: #a3dbb0;
+  --green-text: #116329;
+  --rose: #d1242f;
+  --rose-fill: #fdedef;
+  --rose-border: #f5b0b6;
+  --rose-text: #a40e26;
+  --amber: #b7791f;
+  --amber-fill: #fef6dc;
+  --amber-border: #f0d58a;
+  --amber-text: #7d4e00;
+  --slate: #59636e;
+  --slate-fill: #f0f2f5;
+  --slate-border: #d0d7de;
+  --slate-text: #424a53;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg: #0d1117;
+  --panel: #161b22;
+  --border: #30363d;
+  --hair: #21262d;
+  --dot: #21262d;
+  --t1: #e6edf3;
+  --t2: #9198a1;
+  --t3: #6e7681;
+  --line: #6e7681;
+  --code: #0d1117;
+  --shadow: 0;
+  --blue: #58a6ff;
+  --blue-fill: rgba(56,139,253,0.13);
+  --blue-border: rgba(56,139,253,0.45);
+  --blue-text: #9ecbff;
+  --violet: #bc8cff;
+  --violet-fill: rgba(163,113,247,0.14);
+  --violet-border: rgba(163,113,247,0.5);
+  --violet-text: #d2b8ff;
+  --teal: #2dd4bf;
+  --teal-fill: rgba(45,212,191,0.11);
+  --teal-border: rgba(45,212,191,0.42);
+  --teal-text: #86ecdd;
+  --green: #3fb950;
+  --green-fill: rgba(46,160,67,0.15);
+  --green-border: rgba(63,185,80,0.5);
+  --green-text: #7ee391;
+  --rose: #f85149;
+  --rose-fill: rgba(248,81,73,0.13);
+  --rose-border: rgba(248,81,73,0.5);
+  --rose-text: #ffa198;
+  --amber: #d29922;
+  --amber-fill: rgba(187,128,9,0.15);
+  --amber-border: rgba(210,153,34,0.5);
+  --amber-text: #f2cc60;
+  --slate: #8b949e;
+  --slate-fill: rgba(110,118,129,0.14);
+  --slate-border: rgba(110,118,129,0.45);
+  --slate-text: #c9d1d9;
+} }
+text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif; fill: var(--t2); }
+.bg { fill: var(--bg); stroke: var(--border); }
+.dots { fill: var(--dot); }
+.panel { fill: var(--panel); stroke: var(--border); }
+.code { fill: var(--code); stroke: var(--hair); }
+.hair { stroke: var(--hair); fill: none; }
+.line { stroke: var(--line); fill: none; }
+.mk { fill: var(--line); }
+.eyebrow { font-size: 11.5px; font-weight: 700; letter-spacing: 0.12em; }
+.h1 { font-size: 24px; font-weight: 700; fill: var(--t1); letter-spacing: -0.01em; }
+.sub { font-size: 14px; fill: var(--t2); }
+.h2 { font-size: 15px; font-weight: 650; fill: var(--t1); }
+.h3 { font-size: 13px; font-weight: 600; fill: var(--t1); }
+.b { font-size: 12.5px; fill: var(--t2); }
+.s { font-size: 11.5px; fill: var(--t3); }
+.cap { font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; fill: var(--t3); }
+.m { font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace; font-size: 12px; fill: var(--t1); }
+.ms { font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace; font-size: 11px; fill: var(--t2); }
+.t1 { fill: var(--t1); } .t2 { fill: var(--t2); } .t3 { fill: var(--t3); }
+.bold { font-weight: 700; } .semi { font-weight: 600; }
+.halo { paint-order: stroke; stroke: var(--bg); stroke-width: 5px; stroke-linejoin: round; }
+.halo-p { paint-order: stroke; stroke: var(--panel); stroke-width: 5px; stroke-linejoin: round; }
+.sh { filter: url(#sh); }
+.f-blue { fill: var(--blue-fill); stroke: var(--blue-border); }
+.x-blue { fill: var(--blue-text); }
+.k-blue { fill: var(--blue); }
+.s-blue { stroke: var(--blue); }
+.i-blue { color: var(--blue); }
+.f-violet { fill: var(--violet-fill); stroke: var(--violet-border); }
+.x-violet { fill: var(--violet-text); }
+.k-violet { fill: var(--violet); }
+.s-violet { stroke: var(--violet); }
+.i-violet { color: var(--violet); }
+.f-teal { fill: var(--teal-fill); stroke: var(--teal-border); }
+.x-teal { fill: var(--teal-text); }
+.k-teal { fill: var(--teal); }
+.s-teal { stroke: var(--teal); }
+.i-teal { color: var(--teal); }
+.f-green { fill: var(--green-fill); stroke: var(--green-border); }
+.x-green { fill: var(--green-text); }
+.k-green { fill: var(--green); }
+.s-green { stroke: var(--green); }
+.i-green { color: var(--green); }
+.f-rose { fill: var(--rose-fill); stroke: var(--rose-border); }
+.x-rose { fill: var(--rose-text); }
+.k-rose { fill: var(--rose); }
+.s-rose { stroke: var(--rose); }
+.i-rose { color: var(--rose); }
+.f-amber { fill: var(--amber-fill); stroke: var(--amber-border); }
+.x-amber { fill: var(--amber-text); }
+.k-amber { fill: var(--amber); }
+.s-amber { stroke: var(--amber); }
+.i-amber { color: var(--amber); }
+.f-slate { fill: var(--slate-fill); stroke: var(--slate-border); }
+.x-slate { fill: var(--slate-text); }
+.k-slate { fill: var(--slate); }
+.s-slate { stroke: var(--slate); }
+.i-slate { color: var(--slate); }
+</style>
+<defs>
+<filter id="sh" x="-10%" y="-10%" width="120%" height="140%">
+  <feDropShadow dx="0" dy="1.5" stdDeviation="2" style="flood-color: #1f2328; flood-opacity: var(--shadow)"/>
+</filter>
+<pattern id="dotgrid" width="18" height="18" patternUnits="userSpaceOnUse">
+  <circle cx="1.5" cy="1.5" r="1.1" class="dots"/>
+</pattern>
+<linearGradient id="brand" x1="0" x2="1" y1="0" y2="0">
+  <stop offset="0" style="stop-color: var(--blue)"/>
+  <stop offset="0.5" style="stop-color: var(--violet)"/>
+  <stop offset="1" style="stop-color: var(--teal)"/>
+</linearGradient>
+<marker id="a-line" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="mk"/></marker>
+<marker id="a-blue" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-blue"/></marker>
+<marker id="a-violet" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-violet"/></marker>
+<marker id="a-teal" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-teal"/></marker>
+<marker id="a-green" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-green"/></marker>
+<marker id="a-rose" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-rose"/></marker>
+<marker id="a-amber" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-amber"/></marker>
+<marker id="a-slate" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-slate"/></marker>
+<symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.7 18-8-14a2 2 0 0 0-3.5 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+<symbol id="i-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+<symbol id="i-bot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="i-coins" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></symbol>
+<symbol id="i-compare" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="M11 18H8a2 2 0 0 1-2-2V9"/></symbol>
+<symbol id="i-help" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+<symbol id="i-scale" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+<symbol id="i-terminal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></symbol>
+<symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+</defs>
+<rect x="0.5" y="0.5" width="959" height="715" rx="16" class="bg"/>
+<rect x="0.5" y="0.5" width="959" height="715" rx="16" fill="url(#dotgrid)" opacity="0.55"/>
+<clipPath id="card"><rect x="0.5" y="0.5" width="959" height="715" rx="16"/></clipPath>
+<rect x="0" y="0" width="960" height="4" fill="url(#brand)" clip-path="url(#card)"/>
+<text x="40" y="42" class="eyebrow x-teal">USE CASES</text>
+<text x="40" y="72" class="h1">What you can use it for</text>
+<text x="40" y="97" class="sub">Six questions harness-evals answers, and the code that asks each one.</text>
+<rect x="40" y="124" width="280" height="248" rx="12" class="panel sh"/>
+<rect x="56" y="140" width="32" height="32" rx="9" class="f-violet"/><use href="#i-bot" x="63" y="147" width="17.9" height="17.9" class="i-violet"/>
+<text x="98" y="154" class="h2">Agent or workflow?</text>
+<text x="98" y="171" class="s">is a plain workflow good enough?</text>
+<rect x="56" y="188" width="248" height="96" rx="8" class="code"/>
+<text x="68" y="218.0" class="ms" style="font-size:10.5px; white-space: pre" xml:space="preserve"><tspan class="x-teal">run</tspan><tspan class="t1">(USECASE,</tspan></text>
+<text x="68" y="238.0" class="ms" style="font-size:10.5px; white-space: pre" xml:space="preserve"><tspan class="t1">    {</tspan><tspan class="x-blue">"agent"</tspan><tspan class="t1">: a, </tspan><tspan class="x-blue">"workflow"</tspan><tspan class="t1">: w},</tspan></text>
+<text x="68" y="258.0" class="ms" style="font-size:10.5px; white-space: pre" xml:space="preserve"><tspan class="t1">    trials=10, frozen=FROZEN)</tspan></text>
+<rect x="56" y="300" width="147" height="26" rx="13" class="f-green"/><use href="#i-check" x="64" y="306.8" width="12.5" height="12.5" class="i-green"/><text x="81.5" y="317.1" class="b x-green bold" style="font-size:11.5px">ADOPT  workflow</text>
+<text x="56" y="346" class="s">the agent broke the refund policy</text>
+<text x="56" y="361" class="s">in 2 of its 50 runs</text>
+<rect x="340" y="124" width="280" height="248" rx="12" class="panel sh"/>
+<rect x="356" y="140" width="32" height="32" rx="9" class="f-teal"/><use href="#i-compare" x="363" y="147" width="17.9" height="17.9" class="i-teal"/>
+<text x="398" y="154" class="h2">Did my change help?</text>
+<text x="398" y="171" class="s">a new prompt, tool or routing rule</text>
+<rect x="356" y="188" width="248" height="96" rx="8" class="code"/>
+<text x="368" y="218.0" class="ms" style="font-size:10.5px; white-space: pre" xml:space="preserve"><tspan class="t1">c = </tspan><tspan class="x-teal">compare</tspan><tspan class="t1">(USECASE, v1, v2)</tspan></text>
+<text x="368" y="238.0" class="ms" style="font-size:10.5px; white-space: pre" xml:space="preserve"><tspan class="t1">c.decision   </tspan><tspan class="t3"># "inconclusive"</tspan></text>
+<text x="368" y="258.0" class="ms" style="font-size:10.5px; white-space: pre" xml:space="preserve"><tspan class="t1">c.ci         </tspan><tspan class="t3"># straddles 0</tspan></text>
+<rect x="356" y="300" width="130.7" height="26" rx="13" class="f-amber"/><use href="#i-help" x="364" y="306.8" width="12.5" height="12.5" class="i-amber"/><text x="381.5" y="317.1" class="b x-amber bold" style="font-size:11.5px">INCONCLUSIVE</text>
+<text x="356" y="346" class="s">no clear benefit yet: keep v1,</text>
+<text x="356" y="361" class="s">add tasks or runs</text>
+<rect x="640" y="124" width="280" height="248" rx="12" class="panel sh"/>
+<rect x="656" y="140" width="32" height="32" rx="9" class="f-green"/><use href="#i-coins" x="663" y="147" width="17.9" height="17.9" class="i-green"/>
+<text x="698" y="154" class="h2">Can it be cheaper?</text>
+<text x="698" y="171" class="s">fewer model calls, a smaller context</text>
+<rect x="656" y="188" width="248" height="96" rx="8" class="code"/>
+<text x="668" y="218.0" class="ms" style="font-size:10.5px; white-space: pre" xml:space="preserve"><tspan class="t1">UseCase(..., margin=0.02)</tspan></text>
+<text x="668" y="238.0" class="ms" style="font-size:10.5px; white-space: pre" xml:space="preserve"><tspan class="t3"># adopt if the interval stays</tspan></text>
+<text x="668" y="258.0" class="ms" style="font-size:10.5px; white-space: pre" xml:space="preserve"><tspan class="t3"># above -0.02 and $/task is lower</tspan></text>
+<rect x="656" y="300" width="150.3" height="26" rx="13" class="f-green"/><use href="#i-check" x="664" y="306.8" width="12.5" height="12.5" class="i-green"/><text x="681.5" y="317.1" class="b x-green bold" style="font-size:11.5px">ADOPT  if cheaper</text>
+<text x="656" y="346" class="s">only when every run of both</text>
+<text x="656" y="361" class="s">has a known cost</text>
+<rect x="40" y="392" width="280" height="248" rx="12" class="panel sh"/>
+<rect x="56" y="408" width="32" height="32" rx="9" class="f-slate"/><use href="#i-terminal" x="63" y="415" width="17.9" height="17.9" class="i-slate"/>
+<text x="98" y="422" class="h2">Compare saved runs</text>
+<text x="98" y="439" class="s">later, from the CLI or in CI</text>
+<rect x="56" y="456" width="248" height="96" rx="8" class="code"/>
+<text x="68" y="473.5" class="ms" style="font-size:10.5px; white-space: pre" xml:space="preserve"><tspan class="x-violet">$</tspan><tspan class="t1"> harness-evals compare \</tspan></text>
+<text x="68" y="490.5" class="ms" style="font-size:10.5px; white-space: pre" xml:space="preserve"><tspan class="t1">    main/episodes.jsonl \</tspan></text>
+<text x="68" y="507.5" class="ms" style="font-size:10.5px; white-space: pre" xml:space="preserve"><tspan class="t1">    pr/episodes.jsonl \</tspan></text>
+<text x="68" y="524.5" class="ms" style="font-size:10.5px; white-space: pre" xml:space="preserve"><tspan class="t1">    </tspan><tspan class="x-violet">--usecase</tspan><tspan class="t1"> evals:USECASE \</tspan></text>
+<text x="68" y="541.5" class="ms" style="font-size:10.5px; white-space: pre" xml:space="preserve"><tspan class="t1">    </tspan><tspan class="x-violet">--base</tspan><tspan class="t1"> main </tspan><tspan class="x-violet">--candidate</tspan><tspan class="t1"> pr</tspan></text>
+<rect x="56" y="568" width="170" height="26" rx="13" class="f-slate"/><use href="#i-lock" x="64" y="574.8" width="12.5" height="12.5" class="i-slate"/><text x="81.5" y="585.1" class="b x-slate bold" style="font-size:11.5px">manifests must match</text>
+<text x="56" y="614" class="s">refuses runs made with another</text>
+<text x="56" y="629" class="s">model, tasks, checks or split</text>
+<rect x="340" y="392" width="280" height="248" rx="12" class="panel sh"/>
+<rect x="356" y="408" width="32" height="32" rx="9" class="f-amber"/><use href="#i-scale" x="363" y="415" width="17.9" height="17.9" class="i-amber"/>
+<text x="398" y="422" class="h2">Can I trust the judge?</text>
+<text x="398" y="439" class="s">an LLM grading the replies</text>
+<rect x="356" y="456" width="248" height="96" rx="8" class="code"/>
+<text x="368" y="486.0" class="ms" style="font-size:10.5px; white-space: pre" xml:space="preserve"><tspan class="x-teal">judge</tspan><tspan class="t1">(tasks, eps, </tspan><tspan class="x-blue">"polite"</tspan><tspan class="t1">, llm)</tspan></text>
+<text x="368" y="506.0" class="ms" style="font-size:10.5px; white-space: pre" xml:space="preserve"><tspan class="x-teal">agreement</tspan><tspan class="t1">(</tspan><tspan class="x-teal">zip</tspan><tspan class="t1">(verdicts, labels))</tspan></text>
+<text x="368" y="526.0" class="ms" style="font-size:10.5px; white-space: pre" xml:space="preserve"><tspan class="t3"># accuracy, kappa, false accepts</tspan></text>
+<rect x="356" y="568" width="190.4" height="26" rx="13" class="f-amber"/><use href="#i-users" x="364" y="574.8" width="12.5" height="12.5" class="i-amber"/><text x="381.5" y="585.1" class="b x-amber bold" style="font-size:11.5px">measure the grader first</text>
+<text x="356" y="614" class="s">against labels a person wrote</text>
+<text x="356" y="629" class="s">without seeing the verdicts</text>
+<rect x="640" y="392" width="280" height="248" rx="12" class="panel sh"/>
+<rect x="656" y="408" width="32" height="32" rx="9" class="f-rose"/><use href="#i-search" x="663" y="415" width="17.9" height="17.9" class="i-rose"/>
+<text x="698" y="422" class="h2">Where does it break?</text>
+<text x="698" y="439" class="s">which traces to read first</text>
+<rect x="656" y="456" width="248" height="96" rx="8" class="code"/>
+<text x="668" y="476.0" class="ms" style="font-size:10.5px; white-space: pre" xml:space="preserve"><tspan class="x-teal">failures</tspan><tspan class="t1">(grades)</tspan></text>
+<text x="668" y="496.0" class="ms" style="font-size:10.5px; white-space: pre" xml:space="preserve"><tspan class="t3"># {"refund-late": {</tspan></text>
+<text x="668" y="516.0" class="ms" style="font-size:10.5px; white-space: pre" xml:space="preserve"><tspan class="t3">#    "never refund()": 2,</tspan></text>
+<text x="668" y="536.0" class="ms" style="font-size:10.5px; white-space: pre" xml:space="preserve"><tspan class="t3">#    "says ('30 days',)": 2}, …}</tspan></text>
+<rect x="656" y="568" width="174.8" height="26" rx="13" class="f-rose"/><use href="#i-alert" x="664" y="574.8" width="12.5" height="12.5" class="i-rose"/><text x="681.5" y="585.1" class="b x-rose bold" style="font-size:11.5px">failing checks per task</text>
+<text x="656" y="614" class="s">read the most frequent failure first</text>
+<rect x="40" y="662" width="880" height="46" rx="12" class="f-teal"/>
+<text x="58" y="690" class="cap x-teal">START HERE</text>
+<circle cx="160" cy="685" r="10" class="k-teal"/><text x="160" y="689" text-anchor="middle" class="bold" style="font-size:11.5px; fill: var(--panel)">1</text>
+<text x="176" y="690" class="b t1">write a UseCase</text>
+<use href="#i-arrow-right" x="285.1" y="677" width="16" height="16" class="i-teal"/>
+<circle cx="323.1" cy="685" r="10" class="k-teal"/><text x="323.1" y="689" text-anchor="middle" class="bold" style="font-size:11.5px; fill: var(--panel)">2</text>
+<text x="339.1" y="690" class="b t1">wrap harnesses in adapters</text>
+<use href="#i-arrow-right" x="516.6" y="677" width="16" height="16" class="i-teal"/>
+<circle cx="554.6" cy="685" r="10" class="k-teal"/><text x="554.6" y="689" text-anchor="middle" class="bold" style="font-size:11.5px; fill: var(--panel)">3</text>
+<text x="570.6" y="690" class="m t1">run(..., trials=10)</text>
+<use href="#i-arrow-right" x="719.4" y="677" width="16" height="16" class="i-teal"/>
+<circle cx="757.4" cy="685" r="10" class="k-teal"/><text x="757.4" y="689" text-anchor="middle" class="bold" style="font-size:11.5px; fill: var(--panel)">4</text>
+<text x="773.4" y="690" class="m t1">compare(...)</text>
+</svg>
