@@ -77,7 +77,7 @@ def run(
             try:
                 batch = list(adapter(deepcopy(tasks), trial))
             except Exception as exc:
-                # ponytail: batch errors lose partial evidence; catch per-task errors in adapters.
+                # A batch error loses partial evidence; catch per-task errors in adapters.
                 batch = [
                     Episode(
                         t.id,

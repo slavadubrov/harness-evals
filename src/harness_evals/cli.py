@@ -1,4 +1,4 @@
-"""harness-evals summarize|compare --usecase package.module:USECASE episodes.jsonl ..."""
+"""harness-evals summarize|compare|frontier --usecase package.module:USECASE episodes.jsonl ..."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from pathlib import Path
 
 from harness_evals.compare import compare
 from harness_evals.metrics import summarize
-from harness_evals.report import comparison, table
+from harness_evals.report import comparison, frontier_svg, table
 from harness_evals.runner import comparable, fingerprint, load
 from harness_evals.usecase import UseCase
 
@@ -25,11 +25,13 @@ def _usecase(ref: str) -> UseCase:
 
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(prog="harness-evals")
-    p.add_argument("command", choices=["summarize", "compare"])
+    p.add_argument("command", choices=["summarize", "compare", "frontier"])
     p.add_argument("episodes", nargs="+", type=Path, help="episodes.jsonl files")
     p.add_argument("--usecase", required=True, help="module:attribute of a UseCase")
     p.add_argument("--base", help="harness name to compare against")
     p.add_argument("--candidate", help="harness name to compare")
+    p.add_argument("--x", default="cost_per_task", help="frontier: metric on the x axis")
+    p.add_argument("--y", default="success", help="frontier: metric on the y axis")
     a = p.parse_args(argv)
 
     uc = _usecase(a.usecase)
@@ -61,12 +63,16 @@ def main(argv: list[str] | None = None) -> None:
             raise SystemExit("compare requires manifest.json next to each episodes file")
         for g in uc.grade(load(path)):
             grades[g.episode.harness].append(g)
-    if a.command == "summarize":
-        print(table({h: summarize(gs, uc.metrics) for h, gs in grades.items()}, list(uc.metrics)))
+    if a.command == "compare":
+        if not (a.base in grades and a.candidate in grades):
+            raise SystemExit(f"--base and --candidate must be among: {', '.join(grades)}")
+        print(comparison(compare(uc, grades[a.base], grades[a.candidate])))
         return
-    if not (a.base in grades and a.candidate in grades):
-        raise SystemExit(f"--base and --candidate must be among: {', '.join(grades)}")
-    print(comparison(compare(uc, grades[a.base], grades[a.candidate])))
+    sums = {h: summarize(gs, uc.metrics) for h, gs in grades.items()}
+    if a.command == "frontier":  # an SVG on stdout: harness-evals frontier ... > plot.svg
+        print(frontier_svg(sums, a.x, a.y), end="")
+    else:
+        print(table(sums, list(uc.metrics)))
 
 
 if __name__ == "__main__":

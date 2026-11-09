@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 440" role="img" font-family="system-ui, sans-serif" font-size="13" fill="#222">
+<title>success against cost_per_task</title>
+<rect width="640" height="440" fill="#fff"/>
+<text x="76" y="24" font-size="15" font-weight="600">success against cost_per_task</text>
+<text x="76" y="44" fill="#666">Bars: 95% intervals over tasks. <tspan fill="#c2185b">Line: no other harness beats these on both.</tspan></text>
+<path d="M76.0 64V384M76 384.0H612" stroke="#e6e6e6"/>
+<text x="76.0" y="402" text-anchor="middle" fill="#666">0.00000</text>
+<text x="68" y="388.0" text-anchor="end" fill="#666">0.0</text>
+<path d="M183.2 64V384M76 320.0H612" stroke="#e6e6e6"/>
+<text x="183.2" y="402" text-anchor="middle" fill="#666">0.00005</text>
+<text x="68" y="324.0" text-anchor="end" fill="#666">0.2</text>
+<path d="M290.4 64V384M76 256.0H612" stroke="#e6e6e6"/>
+<text x="290.4" y="402" text-anchor="middle" fill="#666">0.00010</text>
+<text x="68" y="260.0" text-anchor="end" fill="#666">0.4</text>
+<path d="M397.6 64V384M76 192.0H612" stroke="#e6e6e6"/>
+<text x="397.6" y="402" text-anchor="middle" fill="#666">0.00015</text>
+<text x="68" y="196.0" text-anchor="end" fill="#666">0.6</text>
+<path d="M504.8 64V384M76 128.0H612" stroke="#e6e6e6"/>
+<text x="504.8" y="402" text-anchor="middle" fill="#666">0.00020</text>
+<text x="68" y="132.0" text-anchor="end" fill="#666">0.8</text>
+<path d="M612.0 64V384M76 64.0H612" stroke="#e6e6e6"/>
+<text x="612.0" y="402" text-anchor="middle" fill="#666">0.00025</text>
+<text x="68" y="68.0" text-anchor="end" fill="#666">1.0</text>
+<text x="344.0" y="426" text-anchor="middle">cost_per_task</text>
+<text transform="translate(20 224.0) rotate(-90)" text-anchor="middle">success</text>
+<polyline fill="none" stroke="#c2185b" stroke-width="2" points="204.6,128.0 541.7,96.0"/>
+<path d="M510.8 96.0H570.0" stroke="#c2185b"/>
+<path d="M541.7 134.4V64.0" stroke="#c2185b"/>
+<circle cx="541.7" cy="96.0" r="4.5" fill="#c2185b"/>
+<text x="549.7" y="88.0" fill="#c2185b">agent</text>
+<path d="M204.6 128.0H204.6" stroke="#c2185b"/>
+<path d="M204.6 256.0V64.0" stroke="#c2185b"/>
+<circle cx="204.6" cy="128.0" r="4.5" fill="#c2185b"/>
+<text x="212.6" y="120.0" fill="#c2185b">workflow</text>
+</svg>
