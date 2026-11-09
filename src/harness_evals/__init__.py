@@ -1,6 +1,6 @@
 """Evaluate an agent harness or workflow with the model held fixed."""
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 from harness_evals.calibrate import agreement  # noqa: E402
 from harness_evals.compare import Comparison, compare, decide, gate_failures  # noqa: E402

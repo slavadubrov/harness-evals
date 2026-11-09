@@ -760,3 +760,68 @@ def test_integer_latencies_from_json_keep_their_interval_in_the_table():
         g.episode.latency_s = 2  # an int, as json.loads returns for 2
     row = table({"h": summarize(gs)}).splitlines()[-1]
     assert "| 2.00 (2.00–2.00) |" in row
+
+
+# -- where each harness fails ------------------------------------------------------------
+
+
+def _map_case():
+    uc = UseCase(
+        "u",
+        [
+            task(did("refund", order="A1"), says("refunded"), id="refund"),
+            task(never("refund"), says("30 days"), id="late"),
+        ],
+    )
+    eps = [
+        Episode("refund", "agent", 0, actions=[REFUND], reply="refunded"),
+        Episode("refund", "agent", 1, actions=[REFUND], reply="sorry"),  # says fails
+        Episode("late", "agent", 0, actions=[REFUND], reply="30 days"),  # never fails
+        Episode("late", "agent", 1, actions=[REFUND], reply="30 days"),
+    ]
+    return uc, {"agent": uc.grade(eps)}
+
+
+def test_the_failure_map_gives_each_task_a_row_and_each_kind_of_check_a_column():
+    import xml.etree.ElementTree as ET
+
+    from harness_evals.report import check_kind, failure_map_svg
+
+    assert check_kind("did refund(order='A1')") == "did refund"
+    uc, grades = _map_case()
+    svg = ET.fromstring(failure_map_svg(uc, grades))
+    ns = {"s": "http://www.w3.org/2000/svg"}
+    tips = {t.text for t in svg.iter("{http://www.w3.org/2000/svg}title")}
+    assert "agent · refund · says: 1 of 2 runs failed" in tips
+    assert "agent · late · never refund: 2 of 2 runs failed" in tips
+    assert "agent · refund · did refund: 0 of 2 runs failed" in tips
+    labels = {t.text for t in svg.findall(".//s:text", ns)}
+    assert {"refund", "late", "did refund", "says", "never refund"} <= labels
+    # "did refund" is not a check of "late", nor "never refund" of "refund": dots, not cells
+    assert len(svg.findall("s:circle", ns)) == 2
+
+
+def test_the_failure_map_by_run_has_one_cell_per_task_and_run():
+    from harness_evals.report import failure_map_svg
+
+    uc, grades = _map_case()
+    svg = failure_map_svg(uc, grades, by="runs")
+    assert svg.count("runs failed</title>") == 4
+    assert "agent · refund · 2: 1 of 1 runs failed" in svg
+    with pytest.raises(ValueError, match="by"):
+        failure_map_svg(uc, grades, by="tasks")
+    with pytest.raises(ValueError, match="no graded runs"):
+        failure_map_svg(UseCase("v", [task(state(), id="other")]), grades)
+
+
+def test_the_failures_command_draws_the_map_from_saved_runs(tmp_path, capsys, monkeypatch):
+    from types import SimpleNamespace
+
+    from harness_evals.cli import main
+
+    uc, grades = _map_case()
+    monkeypatch.setitem(sys.modules, "map_usecase", SimpleNamespace(USECASE=uc))
+    path = tmp_path / "episodes.jsonl"
+    save([g.episode for g in grades["agent"]], path)
+    main(["failures", str(path), "--usecase", "map_usecase", "--by", "runs"])
+    assert capsys.readouterr().out.startswith("<svg")

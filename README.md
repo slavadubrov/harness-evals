@@ -22,9 +22,9 @@ no agent.
 ## Install
 
 ```bash
-uv add "harness-evals @ git+https://github.com/slavadubrov/harness-evals@v0.3.0"
+uv add "harness-evals @ git+https://github.com/slavadubrov/harness-evals@v0.4.0"
 # or
-pip install "git+https://github.com/slavadubrov/harness-evals@v0.3.0"
+pip install "git+https://github.com/slavadubrov/harness-evals@v0.4.0"
 ```
 
 ## The idea
@@ -46,6 +46,7 @@ harness.
 | `run` | Runs every harness `trials` times, rotates their execution order and writes a manifest of what was held fixed | `runner.py` |
 | `summarize`, `compare` | The metrics below, and a paired comparison with an adoption decision | `metrics.py`, `compare.py` |
 | `pareto`, `frontier_svg` | The harnesses no other beats on two metrics, and a plot of all of them with intervals on both axes | `metrics.py`, `report.py` |
+| `failure_map_svg` | Where each harness fails: tasks in rows, kinds of check or runs in columns | `report.py` |
 | `agreement` | How often a grader agrees with labels a person wrote | `calibrate.py` |
 
 ![C4 component view of the harness_evals package: the public API and CLI on top, runner, compare, report and calibrate in the middle, usecase and metrics below, core at the base; your script, your adapters and the runs folder around it](docs/components.svg)
@@ -186,6 +187,29 @@ cost, latency, calls, tokens and error counts. Pass `lower=["my metric"]` for a 
 metric where smaller is better. The frontier uses point estimates, so read the intervals
 before trusting the order of harnesses whose intervals overlap. From saved runs:
 `harness-evals frontier runs/episodes.jsonl --usecase my_usecase --x latency_p95 > plot.svg`.
+
+## Where each harness fails
+
+A summary says how often a harness fails; a failure map says where. Each task is a row.
+With `by="checks"` (the default), each kind of check is a column, so `did refund(order='A1')`
+and `did refund(order='B1')` share the column `did refund`; a cell shows the share of
+the task's runs that failed that check, and a dot marks a check the task does not have.
+With `by="runs"`, each run is a column. Every harness gets its own panel with the same
+rows, so you can see which harness fails which check on which task. Hovering over a cell
+gives the count.
+
+```python
+from harness_evals.report import failure_map_svg
+
+Path("failures.svg").write_text(failure_map_svg(USECASE, by_harness))  # by_harness as above
+```
+
+![A grid with the example's five tasks in rows and the kinds of check in columns, one panel per harness: the agent refunds the late order and misses its reply check in 2 of 10 runs and misses the policy question's reply check in 3; the workflow misses that reply check in all 10](docs/failure-map.svg)
+
+Pass `group=` to name the columns another way; it receives a check's name. From saved
+runs: `harness-evals failures runs/episodes.jsonl --usecase my_usecase > failures.svg`, or
+`--by runs` for the run grid. `failures(grades)` returns the same counts per check name
+as a dictionary.
 
 ## The adoption rule
 

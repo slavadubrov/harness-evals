@@ -1,4 +1,4 @@
-"""harness-evals summarize|compare|frontier --usecase package.module:USECASE episodes.jsonl ..."""
+"""harness-evals summarize|compare|frontier|failures --usecase module:USECASE episodes.jsonl ..."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from pathlib import Path
 
 from harness_evals.compare import compare
 from harness_evals.metrics import summarize
-from harness_evals.report import comparison, frontier_svg, table
+from harness_evals.report import comparison, failure_map_svg, frontier_svg, table
 from harness_evals.runner import comparable, fingerprint, load
 from harness_evals.usecase import UseCase
 
@@ -25,7 +25,7 @@ def _usecase(ref: str) -> UseCase:
 
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(prog="harness-evals")
-    p.add_argument("command", choices=["summarize", "compare", "frontier"])
+    p.add_argument("command", choices=["summarize", "compare", "frontier", "failures"])
     p.add_argument("episodes", nargs="+", type=Path, help="episodes.jsonl files")
     p.add_argument("--usecase", required=True, help="module:attribute of a UseCase")
     p.add_argument("--base", help="harness name to compare against")
@@ -38,6 +38,7 @@ def main(argv: list[str] | None = None) -> None:
         default=[],
         help="frontier: a custom metric where less is better",
     )
+    p.add_argument("--by", choices=["checks", "runs"], default="checks", help="failures: columns")
     a = p.parse_args(argv)
 
     uc = _usecase(a.usecase)
@@ -73,6 +74,9 @@ def main(argv: list[str] | None = None) -> None:
         if not (a.base in grades and a.candidate in grades):
             raise SystemExit(f"--base and --candidate must be among: {', '.join(grades)}")
         print(comparison(compare(uc, grades[a.base], grades[a.candidate])))
+        return
+    if a.command == "failures":  # an SVG on stdout: harness-evals failures ... > failures.svg
+        print(failure_map_svg(uc, grades, by=a.by), end="")
         return
     sums = {h: summarize(gs, uc.metrics) for h, gs in grades.items()}
     if a.command == "frontier":  # an SVG on stdout: harness-evals frontier ... > plot.svg
