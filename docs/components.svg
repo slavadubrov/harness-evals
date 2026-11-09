@@ -1,0 +1,293 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="712" viewBox="0 0 960 712" role="img" aria-labelledby="title desc">
+<title id="title">What is inside the harness_evals package</title>
+<desc id="desc">C4 component view. Your evaluation script imports the public API in __init__.py; a terminal or CI runs cli.py. runner.py calls your adapters and writes runs/&lt;name&gt;/episodes.jsonl and manifest.json, which cli.py reads. report.py imports compare.py; compare.py imports metrics.py and usecase.py; runner.py imports usecase.py; usecase.py imports metrics.py; metrics.py and usecase.py import core.py. calibrate.py imports nothing.</desc>
+<style>
+:root {
+  --bg: #f6f8fa;
+  --panel: #ffffff;
+  --border: #d8dee4;
+  --hair: #eaeef2;
+  --dot: #d8dee4;
+  --t1: #1f2328;
+  --t2: #59636e;
+  --t3: #818b98;
+  --line: #9aa4af;
+  --code: #f3f5f8;
+  --shadow: 0.07;
+  --blue: #2f6fe4;
+  --blue-fill: #eaf1fe;
+  --blue-border: #b3cdfb;
+  --blue-text: #1f56c4;
+  --violet: #8250df;
+  --violet-fill: #f4effe;
+  --violet-border: #d3c1fa;
+  --violet-text: #6639ba;
+  --teal: #0e9384;
+  --teal-fill: #e4f6f3;
+  --teal-border: #97dbd1;
+  --teal-text: #0a6b61;
+  --green: #1f883d;
+  --green-fill: #e7f6eb;
+  --green-border: #a3dbb0;
+  --green-text: #116329;
+  --rose: #d1242f;
+  --rose-fill: #fdedef;
+  --rose-border: #f5b0b6;
+  --rose-text: #a40e26;
+  --amber: #b7791f;
+  --amber-fill: #fef6dc;
+  --amber-border: #f0d58a;
+  --amber-text: #7d4e00;
+  --slate: #59636e;
+  --slate-fill: #f0f2f5;
+  --slate-border: #d0d7de;
+  --slate-text: #424a53;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg: #0d1117;
+  --panel: #161b22;
+  --border: #30363d;
+  --hair: #21262d;
+  --dot: #21262d;
+  --t1: #e6edf3;
+  --t2: #9198a1;
+  --t3: #6e7681;
+  --line: #6e7681;
+  --code: #0d1117;
+  --shadow: 0;
+  --blue: #58a6ff;
+  --blue-fill: rgba(56,139,253,0.13);
+  --blue-border: rgba(56,139,253,0.45);
+  --blue-text: #9ecbff;
+  --violet: #bc8cff;
+  --violet-fill: rgba(163,113,247,0.14);
+  --violet-border: rgba(163,113,247,0.5);
+  --violet-text: #d2b8ff;
+  --teal: #2dd4bf;
+  --teal-fill: rgba(45,212,191,0.11);
+  --teal-border: rgba(45,212,191,0.42);
+  --teal-text: #86ecdd;
+  --green: #3fb950;
+  --green-fill: rgba(46,160,67,0.15);
+  --green-border: rgba(63,185,80,0.5);
+  --green-text: #7ee391;
+  --rose: #f85149;
+  --rose-fill: rgba(248,81,73,0.13);
+  --rose-border: rgba(248,81,73,0.5);
+  --rose-text: #ffa198;
+  --amber: #d29922;
+  --amber-fill: rgba(187,128,9,0.15);
+  --amber-border: rgba(210,153,34,0.5);
+  --amber-text: #f2cc60;
+  --slate: #8b949e;
+  --slate-fill: rgba(110,118,129,0.14);
+  --slate-border: rgba(110,118,129,0.45);
+  --slate-text: #c9d1d9;
+} }
+text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif; fill: var(--t2); }
+.bg { fill: var(--bg); stroke: var(--border); }
+.dots { fill: var(--dot); }
+.panel { fill: var(--panel); stroke: var(--border); }
+.code { fill: var(--code); stroke: var(--hair); }
+.hair { stroke: var(--hair); fill: none; }
+.line { stroke: var(--line); fill: none; }
+.mk { fill: var(--line); }
+.eyebrow { font-size: 11.5px; font-weight: 700; letter-spacing: 0.12em; }
+.h1 { font-size: 24px; font-weight: 700; fill: var(--t1); letter-spacing: -0.01em; }
+.sub { font-size: 14px; fill: var(--t2); }
+.h2 { font-size: 15px; font-weight: 650; fill: var(--t1); }
+.h3 { font-size: 13px; font-weight: 600; fill: var(--t1); }
+.b { font-size: 12.5px; fill: var(--t2); }
+.s { font-size: 11.5px; fill: var(--t3); }
+.cap { font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; fill: var(--t3); }
+.m { font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace; font-size: 12px; fill: var(--t1); }
+.ms { font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace; font-size: 11px; fill: var(--t2); }
+.t1 { fill: var(--t1); } .t2 { fill: var(--t2); } .t3 { fill: var(--t3); }
+.bold { font-weight: 700; } .semi { font-weight: 600; }
+.halo { paint-order: stroke; stroke: var(--bg); stroke-width: 5px; stroke-linejoin: round; }
+.halo-p { paint-order: stroke; stroke: var(--panel); stroke-width: 5px; stroke-linejoin: round; }
+.sh { filter: url(#sh); }
+.f-blue { fill: var(--blue-fill); stroke: var(--blue-border); }
+.x-blue { fill: var(--blue-text); }
+.k-blue { fill: var(--blue); }
+.s-blue { stroke: var(--blue); }
+.i-blue { color: var(--blue); }
+.f-violet { fill: var(--violet-fill); stroke: var(--violet-border); }
+.x-violet { fill: var(--violet-text); }
+.k-violet { fill: var(--violet); }
+.s-violet { stroke: var(--violet); }
+.i-violet { color: var(--violet); }
+.f-teal { fill: var(--teal-fill); stroke: var(--teal-border); }
+.x-teal { fill: var(--teal-text); }
+.k-teal { fill: var(--teal); }
+.s-teal { stroke: var(--teal); }
+.i-teal { color: var(--teal); }
+.f-green { fill: var(--green-fill); stroke: var(--green-border); }
+.x-green { fill: var(--green-text); }
+.k-green { fill: var(--green); }
+.s-green { stroke: var(--green); }
+.i-green { color: var(--green); }
+.f-rose { fill: var(--rose-fill); stroke: var(--rose-border); }
+.x-rose { fill: var(--rose-text); }
+.k-rose { fill: var(--rose); }
+.s-rose { stroke: var(--rose); }
+.i-rose { color: var(--rose); }
+.f-amber { fill: var(--amber-fill); stroke: var(--amber-border); }
+.x-amber { fill: var(--amber-text); }
+.k-amber { fill: var(--amber); }
+.s-amber { stroke: var(--amber); }
+.i-amber { color: var(--amber); }
+.f-slate { fill: var(--slate-fill); stroke: var(--slate-border); }
+.x-slate { fill: var(--slate-text); }
+.k-slate { fill: var(--slate); }
+.s-slate { stroke: var(--slate); }
+.i-slate { color: var(--slate); }
+</style>
+<defs>
+<filter id="sh" x="-10%" y="-10%" width="120%" height="140%">
+  <feDropShadow dx="0" dy="1.5" stdDeviation="2" style="flood-color: #1f2328; flood-opacity: var(--shadow)"/>
+</filter>
+<pattern id="dotgrid" width="18" height="18" patternUnits="userSpaceOnUse">
+  <circle cx="1.5" cy="1.5" r="1.1" class="dots"/>
+</pattern>
+<linearGradient id="brand" x1="0" x2="1" y1="0" y2="0">
+  <stop offset="0" style="stop-color: var(--blue)"/>
+  <stop offset="0.5" style="stop-color: var(--violet)"/>
+  <stop offset="1" style="stop-color: var(--teal)"/>
+</linearGradient>
+<marker id="a-line" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="mk"/></marker>
+<marker id="a-blue" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-blue"/></marker>
+<marker id="a-violet" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-violet"/></marker>
+<marker id="a-teal" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-teal"/></marker>
+<marker id="a-green" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-green"/></marker>
+<marker id="a-rose" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-rose"/></marker>
+<marker id="a-amber" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-amber"/></marker>
+<marker id="a-slate" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-slate"/></marker>
+<symbol id="i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></symbol>
+<symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+<symbol id="i-package" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></symbol>
+<symbol id="i-plug" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></symbol>
+<symbol id="i-terminal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></symbol>
+<symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></symbol>
+</defs>
+<rect x="0.5" y="0.5" width="959" height="711" rx="16" class="bg"/>
+<rect x="0.5" y="0.5" width="959" height="711" rx="16" fill="url(#dotgrid)" opacity="0.55"/>
+<clipPath id="card"><rect x="0.5" y="0.5" width="959" height="711" rx="16"/></clipPath>
+<rect x="0" y="0" width="960" height="4" fill="url(#brand)" clip-path="url(#card)"/>
+<text x="40" y="42" class="eyebrow x-teal">C4 · COMPONENTS</text>
+<text x="40" y="72" class="h1">What's inside the package</text>
+<text x="40" y="97" class="sub">Nine small modules. Your script talks to the public API; the CLI reads saved runs.</text>
+<rect x="64" y="128" width="421" height="58" rx="10" class="f-violet"/>
+<rect x="78" y="142" width="30" height="30" rx="8.4" class="f-violet"/><use href="#i-user" x="84.6" y="148.6" width="16.8" height="16.8" class="i-violet"/>
+<text x="120" y="153" class="h3">Your evaluation script</text>
+<text x="120" y="172" class="ms"><tspan class="x-violet">from</tspan><tspan class="t1"> harness_evals </tspan><tspan class="x-violet">import</tspan><tspan class="t1"> run, compare, did, …</tspan></text>
+<rect x="506" y="128" width="200" height="58" rx="10" class="f-violet"/>
+<rect x="520" y="142" width="30" height="30" rx="8.4" class="f-violet"/><use href="#i-terminal" x="526.6" y="148.6" width="16.8" height="16.8" class="i-violet"/>
+<text x="562" y="153" class="h3">Terminal or CI</text>
+<text x="562" y="172" class="ms t1">$ harness-evals …</text>
+<rect x="40" y="206" width="690" height="466" rx="16" class="f-teal" style="fill-opacity: 0.45" stroke-dasharray="6 5"/>
+<rect x="56" y="214" width="24" height="24" rx="6.7" class="f-teal"/><use href="#i-package" x="61.3" y="219.3" width="13.4" height="13.4" class="i-teal"/>
+<text x="88" y="231" class="s"><tspan class="m bold x-teal">harness_evals</tspan><tspan class="s">  ·  Python package, stdlib only</tspan></text>
+<rect x="64" y="248" width="421" height="54" rx="10" class="panel sh"/>
+<rect x="64" y="248" width="421" height="54" rx="10" class="" style="fill: none; stroke: var(--teal-border)"/>
+<text x="78" y="270" class="m bold x-teal" style="font-size: 13px">__init__.py</text>
+<text x="471" y="270" class="cap" text-anchor="end">PUBLIC API</text>
+<text x="78" y="289" class="s">re-exports 30 names from the modules below</text>
+<rect x="506" y="248" width="200" height="54" rx="10" class="panel sh"/>
+<rect x="506" y="248" width="200" height="54" rx="10" class="" style="fill: none; stroke: var(--teal-border)"/>
+<text x="520" y="270" class="m bold x-teal" style="font-size: 13px">cli.py</text>
+<text x="692" y="270" class="cap" text-anchor="end">CLI</text>
+<text x="520" y="289" class="ms" style="font-size: 10.5px">summarize | compare</text>
+<rect x="64" y="334" width="200" height="88" rx="10" class="panel sh"/>
+<rect x="64" y="334" width="200" height="88" rx="10" class="" style="fill: none; stroke: var(--teal-border)"/>
+<text x="78" y="357" class="m bold x-teal" style="font-size: 13px">report.py</text>
+<text x="250" y="356" class="cap" text-anchor="end">REPORT</text>
+<text x="78" y="375" class="s">Markdown tables</text>
+<text x="78" y="395" class="ms" style="font-size: 10.5px">table(summaries)</text>
+<text x="78" y="410" class="ms" style="font-size: 10.5px">comparison(c)</text>
+<rect x="285" y="334" width="200" height="88" rx="10" class="panel sh"/>
+<rect x="285" y="334" width="200" height="88" rx="10" class="" style="fill: none; stroke: var(--teal-border)"/>
+<text x="299" y="357" class="m bold x-teal" style="font-size: 13px">compare.py</text>
+<text x="471" y="356" class="cap" text-anchor="end">DECIDE</text>
+<text x="299" y="375" class="s">pairs harnesses by task</text>
+<text x="299" y="395" class="ms" style="font-size: 10.5px">compare · decide</text>
+<text x="299" y="410" class="ms" style="font-size: 10.5px">gate_failures · Comparison</text>
+<rect x="506" y="334" width="200" height="88" rx="10" class="panel sh"/>
+<rect x="506" y="334" width="200" height="88" rx="10" class="" style="fill: none; stroke: var(--teal-border)"/>
+<text x="520" y="357" class="m bold x-teal" style="font-size: 13px">runner.py</text>
+<text x="692" y="356" class="cap" text-anchor="end">RUN</text>
+<text x="520" y="375" class="s">runs harnesses, saves runs</text>
+<text x="520" y="395" class="ms" style="font-size: 10.5px">run · fingerprint</text>
+<text x="520" y="410" class="ms" style="font-size: 10.5px">comparable · save · load</text>
+<rect x="64" y="454" width="200" height="88" rx="10" class="panel sh"/>
+<rect x="64" y="454" width="200" height="88" rx="10" class="" style="fill: none; stroke: var(--teal-border)"/>
+<text x="78" y="477" class="m bold x-teal" style="font-size: 13px">calibrate.py</text>
+<text x="250" y="476" class="cap" text-anchor="end">GRADER</text>
+<text x="78" y="495" class="s">grader vs human labels</text>
+<text x="78" y="515" class="ms" style="font-size: 10.5px">agreement(pairs)</text>
+<text x="78" y="530" class="ms" style="font-size: 10.5px">accuracy · kappa</text>
+<rect x="285" y="454" width="200" height="88" rx="10" class="panel sh"/>
+<rect x="285" y="454" width="200" height="88" rx="10" class="" style="fill: none; stroke: var(--teal-border)"/>
+<text x="299" y="477" class="m bold x-teal" style="font-size: 13px">metrics.py</text>
+<text x="471" y="476" class="cap" text-anchor="end">MEASURE</text>
+<text x="299" y="495" class="s">numbers with intervals</text>
+<text x="299" y="515" class="ms" style="font-size: 10.5px">summarize · pass_hat_k</text>
+<text x="299" y="530" class="ms" style="font-size: 10.5px">bootstrap · failures</text>
+<rect x="506" y="454" width="200" height="88" rx="10" class="panel sh"/>
+<rect x="506" y="454" width="200" height="88" rx="10" class="" style="fill: none; stroke: var(--teal-border)"/>
+<text x="520" y="477" class="m bold x-teal" style="font-size: 13px">usecase.py</text>
+<text x="692" y="476" class="cap" text-anchor="end">DEFINE</text>
+<text x="520" y="495" class="s">tasks and the bar to clear</text>
+<text x="520" y="515" class="ms" style="font-size: 10.5px">UseCase · split · grade</text>
+<text x="520" y="530" class="ms" style="font-size: 10.5px">gates · metrics · margin</text>
+<rect x="64" y="574" width="642" height="74" rx="10" class="panel sh"/>
+<rect x="64" y="574" width="642" height="74" rx="10" class="" style="fill: none; stroke: var(--teal-border)"/>
+<text x="78" y="597" class="m bold x-teal" style="font-size: 13px">core.py</text>
+<text x="692" y="596" class="cap" text-anchor="end">VOCABULARY</text>
+<text x="78" y="615" class="s">what a run is and how it is checked: Task · Check · Episode · Action · Grade · grade()</text>
+<text x="78" y="635" class="ms" style="font-size: 10.5px">did · never · at_most · says · never_says · ended · state · judged · judge</text>
+<path d="M606.0 302 V331" class="line" fill="none" stroke-width="1.3" marker-end="url(#a-line)" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="598" y="323" class="s" text-anchor="end">cli.py also imports compare, report, metrics, usecase</text>
+<path d="M264 378 H282" class="line" fill="none" stroke-width="1.3" marker-end="url(#a-line)" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M385.0 422 V451" class="line" fill="none" stroke-width="1.3" marker-end="url(#a-line)" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M455 422 L536 451" class="line" fill="none" stroke-width="1.3" marker-end="url(#a-line)" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M606.0 422 V451" class="line" fill="none" stroke-width="1.3" marker-end="url(#a-line)" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M506 498 H488" class="line" fill="none" stroke-width="1.3" marker-end="url(#a-line)" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M385.0 542 V571" class="line" fill="none" stroke-width="1.3" marker-end="url(#a-line)" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M606.0 542 V571" class="line" fill="none" stroke-width="1.3" marker-end="url(#a-line)" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="164" y="564" class="s" text-anchor="middle">imports nothing</text>
+<rect x="762" y="248" width="158" height="122" rx="10" class="f-slate"/>
+<use href="#i-folder" x="776" y="260" width="18" height="18" class="i-slate"/>
+<text x="802" y="274" class="m semi">runs/&lt;name&gt;/</text>
+<use href="#i-file" x="778" y="292" width="14" height="14" class="i-slate"/>
+<text x="798" y="303" class="ms t1">episodes.jsonl</text>
+<use href="#i-file" x="778" y="316" width="14" height="14" class="i-slate"/>
+<text x="798" y="327" class="ms t1">manifest.json</text>
+<text x="776" y="356" class="s">what ran, what was fixed</text>
+<rect x="762" y="384" width="158" height="106" rx="10" class="f-violet"/>
+<use href="#i-plug" x="776" y="396" width="18" height="18" class="i-violet"/>
+<text x="802" y="410" class="h3">Your adapters</text>
+<rect x="776" y="424" width="49.5" height="20" rx="10" class="f-violet"/><text x="785" y="437.8" class="m x-violet" style="font-size:10.5px">agent</text>
+<rect x="831.5" y="424" width="68.4" height="20" rx="10" class="f-violet"/><text x="840.5" y="437.8" class="m x-violet" style="font-size:10.5px">workflow</text>
+<text x="776" y="464" class="s">run your harness on the</text>
+<text x="776" y="479" class="s">frozen model</text>
+<path d="M706 275 H759" class="line" fill="none" stroke-width="1.3" marker-end="url(#a-line)" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="734" y="269" class="s halo" text-anchor="middle">reads</text>
+<path d="M706 352 H759" class="line" fill="none" stroke-width="1.3" marker-end="url(#a-line)" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="734" y="346" class="s halo" text-anchor="middle">writes</text>
+<path d="M706 400 H759" class="line" fill="none" stroke-width="1.3" marker-end="url(#a-line)" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="734" y="394" class="s halo" text-anchor="middle">calls</text>
+<path d="M404 186 V245" class="line" fill="none" stroke-width="1.3" marker-end="url(#a-line)" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="412" y="226" class="s halo" text-anchor="start">imports</text>
+<path d="M606.0 186 V245" class="line" fill="none" stroke-width="1.3" marker-end="url(#a-line)" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="614" y="226" class="s halo" text-anchor="start">runs</text>
+<path d="M40 686 H70" class="line" fill="none" stroke-width="1.3" marker-end="url(#a-line)" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="78" y="690" class="s">imports or calls</text>
+<rect x="200" y="679" width="14" height="14" rx="4" class="f-violet"/>
+<text x="220" y="690" class="s">your code</text>
+<rect x="283.5" y="679" width="14" height="14" rx="4" class="f-teal"/>
+<text x="303.5" y="690" class="s">harness-evals</text>
+<rect x="388.7" y="679" width="14" height="14" rx="4" class="f-slate"/>
+<text x="408.7" y="690" class="s">files on disk</text>
+<text x="920" y="690" class="s" text-anchor="end">Arrows point at the module imported. No cycles.</text>
+</svg>

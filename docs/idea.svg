@@ -1,0 +1,233 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="506" viewBox="0 0 960 506" role="img" aria-labelledby="title desc">
+<title id="title">The idea: change only the harness</title>
+<desc id="desc">Two stacks of three layers. In a model benchmark the tasks, checks and harness are held fixed and the model is swapped. In a harness evaluation the tasks, checks, model and settings are held fixed and only the harness (agent, workflow, agent v2) is swapped, so a difference in the results belongs to the harness.</desc>
+<style>
+:root {
+  --bg: #f6f8fa;
+  --panel: #ffffff;
+  --border: #d8dee4;
+  --hair: #eaeef2;
+  --dot: #d8dee4;
+  --t1: #1f2328;
+  --t2: #59636e;
+  --t3: #818b98;
+  --line: #9aa4af;
+  --code: #f3f5f8;
+  --shadow: 0.07;
+  --blue: #2f6fe4;
+  --blue-fill: #eaf1fe;
+  --blue-border: #b3cdfb;
+  --blue-text: #1f56c4;
+  --violet: #8250df;
+  --violet-fill: #f4effe;
+  --violet-border: #d3c1fa;
+  --violet-text: #6639ba;
+  --teal: #0e9384;
+  --teal-fill: #e4f6f3;
+  --teal-border: #97dbd1;
+  --teal-text: #0a6b61;
+  --green: #1f883d;
+  --green-fill: #e7f6eb;
+  --green-border: #a3dbb0;
+  --green-text: #116329;
+  --rose: #d1242f;
+  --rose-fill: #fdedef;
+  --rose-border: #f5b0b6;
+  --rose-text: #a40e26;
+  --amber: #b7791f;
+  --amber-fill: #fef6dc;
+  --amber-border: #f0d58a;
+  --amber-text: #7d4e00;
+  --slate: #59636e;
+  --slate-fill: #f0f2f5;
+  --slate-border: #d0d7de;
+  --slate-text: #424a53;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg: #0d1117;
+  --panel: #161b22;
+  --border: #30363d;
+  --hair: #21262d;
+  --dot: #21262d;
+  --t1: #e6edf3;
+  --t2: #9198a1;
+  --t3: #6e7681;
+  --line: #6e7681;
+  --code: #0d1117;
+  --shadow: 0;
+  --blue: #58a6ff;
+  --blue-fill: rgba(56,139,253,0.13);
+  --blue-border: rgba(56,139,253,0.45);
+  --blue-text: #9ecbff;
+  --violet: #bc8cff;
+  --violet-fill: rgba(163,113,247,0.14);
+  --violet-border: rgba(163,113,247,0.5);
+  --violet-text: #d2b8ff;
+  --teal: #2dd4bf;
+  --teal-fill: rgba(45,212,191,0.11);
+  --teal-border: rgba(45,212,191,0.42);
+  --teal-text: #86ecdd;
+  --green: #3fb950;
+  --green-fill: rgba(46,160,67,0.15);
+  --green-border: rgba(63,185,80,0.5);
+  --green-text: #7ee391;
+  --rose: #f85149;
+  --rose-fill: rgba(248,81,73,0.13);
+  --rose-border: rgba(248,81,73,0.5);
+  --rose-text: #ffa198;
+  --amber: #d29922;
+  --amber-fill: rgba(187,128,9,0.15);
+  --amber-border: rgba(210,153,34,0.5);
+  --amber-text: #f2cc60;
+  --slate: #8b949e;
+  --slate-fill: rgba(110,118,129,0.14);
+  --slate-border: rgba(110,118,129,0.45);
+  --slate-text: #c9d1d9;
+} }
+text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif; fill: var(--t2); }
+.bg { fill: var(--bg); stroke: var(--border); }
+.dots { fill: var(--dot); }
+.panel { fill: var(--panel); stroke: var(--border); }
+.code { fill: var(--code); stroke: var(--hair); }
+.hair { stroke: var(--hair); fill: none; }
+.line { stroke: var(--line); fill: none; }
+.mk { fill: var(--line); }
+.eyebrow { font-size: 11.5px; font-weight: 700; letter-spacing: 0.12em; }
+.h1 { font-size: 24px; font-weight: 700; fill: var(--t1); letter-spacing: -0.01em; }
+.sub { font-size: 14px; fill: var(--t2); }
+.h2 { font-size: 15px; font-weight: 650; fill: var(--t1); }
+.h3 { font-size: 13px; font-weight: 600; fill: var(--t1); }
+.b { font-size: 12.5px; fill: var(--t2); }
+.s { font-size: 11.5px; fill: var(--t3); }
+.cap { font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; fill: var(--t3); }
+.m { font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace; font-size: 12px; fill: var(--t1); }
+.ms { font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace; font-size: 11px; fill: var(--t2); }
+.t1 { fill: var(--t1); } .t2 { fill: var(--t2); } .t3 { fill: var(--t3); }
+.bold { font-weight: 700; } .semi { font-weight: 600; }
+.halo { paint-order: stroke; stroke: var(--bg); stroke-width: 5px; stroke-linejoin: round; }
+.halo-p { paint-order: stroke; stroke: var(--panel); stroke-width: 5px; stroke-linejoin: round; }
+.sh { filter: url(#sh); }
+.f-blue { fill: var(--blue-fill); stroke: var(--blue-border); }
+.x-blue { fill: var(--blue-text); }
+.k-blue { fill: var(--blue); }
+.s-blue { stroke: var(--blue); }
+.i-blue { color: var(--blue); }
+.f-violet { fill: var(--violet-fill); stroke: var(--violet-border); }
+.x-violet { fill: var(--violet-text); }
+.k-violet { fill: var(--violet); }
+.s-violet { stroke: var(--violet); }
+.i-violet { color: var(--violet); }
+.f-teal { fill: var(--teal-fill); stroke: var(--teal-border); }
+.x-teal { fill: var(--teal-text); }
+.k-teal { fill: var(--teal); }
+.s-teal { stroke: var(--teal); }
+.i-teal { color: var(--teal); }
+.f-green { fill: var(--green-fill); stroke: var(--green-border); }
+.x-green { fill: var(--green-text); }
+.k-green { fill: var(--green); }
+.s-green { stroke: var(--green); }
+.i-green { color: var(--green); }
+.f-rose { fill: var(--rose-fill); stroke: var(--rose-border); }
+.x-rose { fill: var(--rose-text); }
+.k-rose { fill: var(--rose); }
+.s-rose { stroke: var(--rose); }
+.i-rose { color: var(--rose); }
+.f-amber { fill: var(--amber-fill); stroke: var(--amber-border); }
+.x-amber { fill: var(--amber-text); }
+.k-amber { fill: var(--amber); }
+.s-amber { stroke: var(--amber); }
+.i-amber { color: var(--amber); }
+.f-slate { fill: var(--slate-fill); stroke: var(--slate-border); }
+.x-slate { fill: var(--slate-text); }
+.k-slate { fill: var(--slate); }
+.s-slate { stroke: var(--slate); }
+.i-slate { color: var(--slate); }
+</style>
+<defs>
+<filter id="sh" x="-10%" y="-10%" width="120%" height="140%">
+  <feDropShadow dx="0" dy="1.5" stdDeviation="2" style="flood-color: #1f2328; flood-opacity: var(--shadow)"/>
+</filter>
+<pattern id="dotgrid" width="18" height="18" patternUnits="userSpaceOnUse">
+  <circle cx="1.5" cy="1.5" r="1.1" class="dots"/>
+</pattern>
+<linearGradient id="brand" x1="0" x2="1" y1="0" y2="0">
+  <stop offset="0" style="stop-color: var(--blue)"/>
+  <stop offset="0.5" style="stop-color: var(--violet)"/>
+  <stop offset="1" style="stop-color: var(--teal)"/>
+</linearGradient>
+<marker id="a-line" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="mk"/></marker>
+<marker id="a-blue" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-blue"/></marker>
+<marker id="a-violet" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-violet"/></marker>
+<marker id="a-teal" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-teal"/></marker>
+<marker id="a-green" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-green"/></marker>
+<marker id="a-rose" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-rose"/></marker>
+<marker id="a-amber" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-amber"/></marker>
+<marker id="a-slate" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-slate"/></marker>
+<symbol id="i-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+<symbol id="i-swap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></symbol>
+<symbol id="i-target" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+</defs>
+<rect x="0.5" y="0.5" width="959" height="505" rx="16" class="bg"/>
+<rect x="0.5" y="0.5" width="959" height="505" rx="16" fill="url(#dotgrid)" opacity="0.55"/>
+<clipPath id="card"><rect x="0.5" y="0.5" width="959" height="505" rx="16"/></clipPath>
+<rect x="0" y="0" width="960" height="4" fill="url(#brand)" clip-path="url(#card)"/>
+<text x="40" y="42" class="eyebrow x-teal">THE IDEA</text>
+<text x="40" y="72" class="h1">Change one thing: the harness</text>
+<text x="40" y="97" class="sub">A harness is the code around a model: prompts, tools, the loop, the workflow.</text>
+<text x="40" y="142" class="cap">MODEL BENCHMARK</text>
+<rect x="40" y="156" width="420" height="274" rx="12" class="panel sh"/>
+<rect x="56" y="172" width="388" height="60" rx="10" class="f-blue"/>
+<circle cx="84" cy="202.0" r="15" style="fill: var(--panel)"/>
+<use href="#i-lock" x="75" y="193" width="18" height="18" class="i-blue"/>
+<text x="110" y="198" class="h3">Tasks &amp; checks</text>
+<text x="110" y="216" class="s">the same benchmark</text>
+<text x="430" y="207" class="s x-blue semi" text-anchor="end">held fixed</text>
+<rect x="56" y="242" width="388" height="60" rx="10" class="f-blue"/>
+<circle cx="84" cy="272.0" r="15" style="fill: var(--panel)"/>
+<use href="#i-lock" x="75" y="263" width="18" height="18" class="i-blue"/>
+<text x="110" y="268" class="h3">Harness</text>
+<text x="110" y="286" class="s">one prompt and tool loop</text>
+<text x="430" y="277" class="s x-blue semi" text-anchor="end">held fixed</text>
+<rect x="56" y="312" width="388" height="60" rx="10" class="f-violet" stroke-dasharray="5 4"/>
+<circle cx="84" cy="342.0" r="15" style="fill: var(--panel)"/>
+<use href="#i-swap" x="75" y="333" width="18" height="18" class="i-violet"/>
+<text x="110" y="338" class="h3">Model</text>
+<text x="110" y="356" class="s">what varies</text>
+<rect x="369.9" y="331" width="62.1" height="22" rx="11" class="f-violet"/><text x="378.9" y="345.8" class="m x-violet" style="font-size:10.5px">model C</text>
+<rect x="301.8" y="331" width="62.1" height="22" rx="11" class="f-violet"/><text x="310.8" y="345.8" class="m x-violet" style="font-size:10.5px">model B</text>
+<rect x="233.7" y="331" width="62.1" height="22" rx="11" class="f-violet"/><text x="242.7" y="345.8" class="m x-violet" style="font-size:10.5px">model A</text>
+<use href="#i-arrow-right" x="58" y="395" width="16" height="16" class="i-slate"/>
+<text x="82" y="408" class="h3">Which model is better?</text>
+<text x="500" y="142" class="cap x-teal">HARNESS EVALUATION</text>
+<rect x="654.8" y="128" width="99.9" height="20" rx="10" class="f-teal"/><text x="663.8" y="141.8" class="m x-teal" style="font-size:10.5px">harness-evals</text>
+<rect x="500" y="156" width="420" height="274" rx="12" class="panel sh"/>
+<rect x="500" y="156" width="420" height="274" rx="12" class="" style="fill: none; stroke: var(--teal-border); stroke-width: 1.5"/>
+<rect x="516" y="172" width="388" height="60" rx="10" class="f-blue"/>
+<circle cx="544" cy="202.0" r="15" style="fill: var(--panel)"/>
+<use href="#i-lock" x="535" y="193" width="18" height="18" class="i-blue"/>
+<text x="570" y="198" class="h3">Tasks &amp; checks</text>
+<text x="570" y="216" class="s">your use case, fingerprinted</text>
+<text x="890" y="207" class="s x-blue semi" text-anchor="end">held fixed</text>
+<rect x="516" y="242" width="388" height="60" rx="10" class="f-violet" stroke-dasharray="5 4"/>
+<circle cx="544" cy="272.0" r="15" style="fill: var(--panel)"/>
+<use href="#i-swap" x="535" y="263" width="18" height="18" class="i-violet"/>
+<text x="570" y="268" class="h3">Harness</text>
+<text x="570" y="286" class="s">what varies</text>
+<rect x="823.6" y="261" width="68.4" height="22" rx="11" class="f-violet"/><text x="832.6" y="275.8" class="m x-violet" style="font-size:10.5px">agent v2</text>
+<rect x="749.2" y="261" width="68.4" height="22" rx="11" class="f-violet"/><text x="758.2" y="275.8" class="m x-violet" style="font-size:10.5px">workflow</text>
+<rect x="693.7" y="261" width="49.5" height="22" rx="11" class="f-violet"/><text x="702.7" y="275.8" class="m x-violet" style="font-size:10.5px">agent</text>
+<rect x="516" y="312" width="388" height="60" rx="10" class="f-blue"/>
+<circle cx="544" cy="342.0" r="15" style="fill: var(--panel)"/>
+<use href="#i-lock" x="535" y="333" width="18" height="18" class="i-blue"/>
+<text x="570" y="338" class="h3">Model &amp; settings</text>
+<text x="570" y="356" class="ms x-blue">frozen={"model": …}</text>
+<text x="890" y="347" class="s x-blue semi" text-anchor="end">held fixed</text>
+<use href="#i-arrow-right" x="518" y="395" width="16" height="16" class="i-teal"/>
+<text x="542" y="408" class="h3 x-teal">Which harness should ship?</text>
+<circle cx="480" cy="293.0" r="17" class="panel"/>
+<text x="480" y="297.5" class="s bold" text-anchor="middle">vs</text>
+<rect x="40" y="450" width="880" height="44" rx="12" class="f-teal"/>
+<use href="#i-target" x="58" y="463" width="18" height="18" class="i-teal"/>
+<text x="86" y="477" class="b"><tspan class="t1 semi">Only the harness changes, </tspan><tspan class="t2">so a difference in the results belongs to the harness.</tspan></text>
+</svg>

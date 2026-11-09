@@ -1,0 +1,431 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="792" viewBox="0 0 960 792" role="img" aria-labelledby="title desc">
+<title id="title">How runs become numbers</title>
+<desc id="desc">Part 1: the task refund-late and the episode from agent trial 2 (reply: Order A2 has been refunded; the environment recorded refund(order=A2)). Checks: no run error is True, the critical check never refund() is False, says 30 days is False. A None verdict would mean unknown, which fails. The grade: passed False, failed both checks, violation never refund(). Part 2: pass and fail grids for 5 tasks by 10 trials. Agent: success 0.90 (0.78 to 1.00), pass^10 0.60, 2 violations on refund-late. Workflow: success 0.80 (0.40 to 1.00), pass^10 0.80, no violations; it fails policy-question every time.</desc>
+<style>
+:root {
+  --bg: #f6f8fa;
+  --panel: #ffffff;
+  --border: #d8dee4;
+  --hair: #eaeef2;
+  --dot: #d8dee4;
+  --t1: #1f2328;
+  --t2: #59636e;
+  --t3: #818b98;
+  --line: #9aa4af;
+  --code: #f3f5f8;
+  --shadow: 0.07;
+  --blue: #2f6fe4;
+  --blue-fill: #eaf1fe;
+  --blue-border: #b3cdfb;
+  --blue-text: #1f56c4;
+  --violet: #8250df;
+  --violet-fill: #f4effe;
+  --violet-border: #d3c1fa;
+  --violet-text: #6639ba;
+  --teal: #0e9384;
+  --teal-fill: #e4f6f3;
+  --teal-border: #97dbd1;
+  --teal-text: #0a6b61;
+  --green: #1f883d;
+  --green-fill: #e7f6eb;
+  --green-border: #a3dbb0;
+  --green-text: #116329;
+  --rose: #d1242f;
+  --rose-fill: #fdedef;
+  --rose-border: #f5b0b6;
+  --rose-text: #a40e26;
+  --amber: #b7791f;
+  --amber-fill: #fef6dc;
+  --amber-border: #f0d58a;
+  --amber-text: #7d4e00;
+  --slate: #59636e;
+  --slate-fill: #f0f2f5;
+  --slate-border: #d0d7de;
+  --slate-text: #424a53;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg: #0d1117;
+  --panel: #161b22;
+  --border: #30363d;
+  --hair: #21262d;
+  --dot: #21262d;
+  --t1: #e6edf3;
+  --t2: #9198a1;
+  --t3: #6e7681;
+  --line: #6e7681;
+  --code: #0d1117;
+  --shadow: 0;
+  --blue: #58a6ff;
+  --blue-fill: rgba(56,139,253,0.13);
+  --blue-border: rgba(56,139,253,0.45);
+  --blue-text: #9ecbff;
+  --violet: #bc8cff;
+  --violet-fill: rgba(163,113,247,0.14);
+  --violet-border: rgba(163,113,247,0.5);
+  --violet-text: #d2b8ff;
+  --teal: #2dd4bf;
+  --teal-fill: rgba(45,212,191,0.11);
+  --teal-border: rgba(45,212,191,0.42);
+  --teal-text: #86ecdd;
+  --green: #3fb950;
+  --green-fill: rgba(46,160,67,0.15);
+  --green-border: rgba(63,185,80,0.5);
+  --green-text: #7ee391;
+  --rose: #f85149;
+  --rose-fill: rgba(248,81,73,0.13);
+  --rose-border: rgba(248,81,73,0.5);
+  --rose-text: #ffa198;
+  --amber: #d29922;
+  --amber-fill: rgba(187,128,9,0.15);
+  --amber-border: rgba(210,153,34,0.5);
+  --amber-text: #f2cc60;
+  --slate: #8b949e;
+  --slate-fill: rgba(110,118,129,0.14);
+  --slate-border: rgba(110,118,129,0.45);
+  --slate-text: #c9d1d9;
+} }
+text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif; fill: var(--t2); }
+.bg { fill: var(--bg); stroke: var(--border); }
+.dots { fill: var(--dot); }
+.panel { fill: var(--panel); stroke: var(--border); }
+.code { fill: var(--code); stroke: var(--hair); }
+.hair { stroke: var(--hair); fill: none; }
+.line { stroke: var(--line); fill: none; }
+.mk { fill: var(--line); }
+.eyebrow { font-size: 11.5px; font-weight: 700; letter-spacing: 0.12em; }
+.h1 { font-size: 24px; font-weight: 700; fill: var(--t1); letter-spacing: -0.01em; }
+.sub { font-size: 14px; fill: var(--t2); }
+.h2 { font-size: 15px; font-weight: 650; fill: var(--t1); }
+.h3 { font-size: 13px; font-weight: 600; fill: var(--t1); }
+.b { font-size: 12.5px; fill: var(--t2); }
+.s { font-size: 11.5px; fill: var(--t3); }
+.cap { font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; fill: var(--t3); }
+.m { font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace; font-size: 12px; fill: var(--t1); }
+.ms { font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace; font-size: 11px; fill: var(--t2); }
+.t1 { fill: var(--t1); } .t2 { fill: var(--t2); } .t3 { fill: var(--t3); }
+.bold { font-weight: 700; } .semi { font-weight: 600; }
+.halo { paint-order: stroke; stroke: var(--bg); stroke-width: 5px; stroke-linejoin: round; }
+.halo-p { paint-order: stroke; stroke: var(--panel); stroke-width: 5px; stroke-linejoin: round; }
+.sh { filter: url(#sh); }
+.f-blue { fill: var(--blue-fill); stroke: var(--blue-border); }
+.x-blue { fill: var(--blue-text); }
+.k-blue { fill: var(--blue); }
+.s-blue { stroke: var(--blue); }
+.i-blue { color: var(--blue); }
+.f-violet { fill: var(--violet-fill); stroke: var(--violet-border); }
+.x-violet { fill: var(--violet-text); }
+.k-violet { fill: var(--violet); }
+.s-violet { stroke: var(--violet); }
+.i-violet { color: var(--violet); }
+.f-teal { fill: var(--teal-fill); stroke: var(--teal-border); }
+.x-teal { fill: var(--teal-text); }
+.k-teal { fill: var(--teal); }
+.s-teal { stroke: var(--teal); }
+.i-teal { color: var(--teal); }
+.f-green { fill: var(--green-fill); stroke: var(--green-border); }
+.x-green { fill: var(--green-text); }
+.k-green { fill: var(--green); }
+.s-green { stroke: var(--green); }
+.i-green { color: var(--green); }
+.f-rose { fill: var(--rose-fill); stroke: var(--rose-border); }
+.x-rose { fill: var(--rose-text); }
+.k-rose { fill: var(--rose); }
+.s-rose { stroke: var(--rose); }
+.i-rose { color: var(--rose); }
+.f-amber { fill: var(--amber-fill); stroke: var(--amber-border); }
+.x-amber { fill: var(--amber-text); }
+.k-amber { fill: var(--amber); }
+.s-amber { stroke: var(--amber); }
+.i-amber { color: var(--amber); }
+.f-slate { fill: var(--slate-fill); stroke: var(--slate-border); }
+.x-slate { fill: var(--slate-text); }
+.k-slate { fill: var(--slate); }
+.s-slate { stroke: var(--slate); }
+.i-slate { color: var(--slate); }
+</style>
+<defs>
+<filter id="sh" x="-10%" y="-10%" width="120%" height="140%">
+  <feDropShadow dx="0" dy="1.5" stdDeviation="2" style="flood-color: #1f2328; flood-opacity: var(--shadow)"/>
+</filter>
+<pattern id="dotgrid" width="18" height="18" patternUnits="userSpaceOnUse">
+  <circle cx="1.5" cy="1.5" r="1.1" class="dots"/>
+</pattern>
+<linearGradient id="brand" x1="0" x2="1" y1="0" y2="0">
+  <stop offset="0" style="stop-color: var(--blue)"/>
+  <stop offset="0.5" style="stop-color: var(--violet)"/>
+  <stop offset="1" style="stop-color: var(--teal)"/>
+</linearGradient>
+<marker id="a-line" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="mk"/></marker>
+<marker id="a-blue" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-blue"/></marker>
+<marker id="a-violet" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-violet"/></marker>
+<marker id="a-teal" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-teal"/></marker>
+<marker id="a-green" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-green"/></marker>
+<marker id="a-rose" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-rose"/></marker>
+<marker id="a-amber" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-amber"/></marker>
+<marker id="a-slate" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 9 5 0 9z" class="k-slate"/></marker>
+<symbol id="i-bot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></symbol>
+<symbol id="i-clipboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></symbol>
+<symbol id="i-db" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></symbol>
+<symbol id="i-flow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></symbol>
+<symbol id="i-gavel" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 12.5-8 8a2.12 2.12 0 1 1-3-3l8-8"/><path d="m16 16 6-6"/><path d="m8 8 6-6"/><path d="m9 7 8 8"/><path d="m21 11-8-8"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></symbol>
+<symbol id="i-scale" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+</defs>
+<rect x="0.5" y="0.5" width="959" height="791" rx="16" class="bg"/>
+<rect x="0.5" y="0.5" width="959" height="791" rx="16" fill="url(#dotgrid)" opacity="0.55"/>
+<clipPath id="card"><rect x="0.5" y="0.5" width="959" height="791" rx="16"/></clipPath>
+<rect x="0" y="0" width="960" height="4" fill="url(#brand)" clip-path="url(#card)"/>
+<text x="40" y="42" class="eyebrow x-teal">GRADING &amp; METRICS</text>
+<text x="40" y="72" class="h1">How runs become numbers</text>
+<text x="40" y="97" class="sub">A check says pass, fail or unknown. Tasks, not runs, are the unit of evidence.</text>
+<text x="40" y="138" class="s"><tspan class="cap x-teal">1 · ONE EPISODE, ONE GRADE</tspan><tspan class="s">     agent, trial 2, task refund-late</tspan></text>
+<rect x="40" y="152" width="290" height="90" rx="12" class="panel sh"/>
+<rect x="54" y="166" width="28" height="28" rx="7.8" class="f-violet"/><use href="#i-clipboard" x="60.2" y="172.2" width="15.7" height="15.7" class="i-violet"/>
+<text x="92" y="179" class="h3">Task</text>
+<text x="92" y="195" class="ms x-violet">refund-late</text>
+<rect x="54" y="208" width="262" height="22" rx="6" class="code"/>
+<text x="64" y="223" class="ms t1">"ana: refund order A2"</text>
+<rect x="40" y="254" width="290" height="120" rx="12" class="panel sh"/>
+<rect x="54" y="268" width="28" height="28" rx="7.8" class="f-slate"/><use href="#i-db" x="60.2" y="274.2" width="15.7" height="15.7" class="i-slate"/>
+<text x="92" y="281" class="h3">Episode</text>
+<text x="92" y="297" class="s">what the environment recorded</text>
+<rect x="54" y="310" width="262" height="22" rx="6" class="code"/>
+<text x="64" y="325" class="ms"><tspan class="t3">reply </tspan><tspan class="t1">"Order A2 has been refunded."</tspan></text>
+<rect x="54" y="338" width="262" height="22" rx="6" class="code"/>
+<text x="64" y="353" class="ms"><tspan class="t3">actions </tspan><tspan class="t1">refund(order="A2")</tspan></text>
+<rect x="360" y="152" width="300" height="222" rx="12" class="panel sh"/>
+<rect x="374" y="166" width="28" height="28" rx="7.8" class="f-teal"/><use href="#i-list" x="380.2" y="172.2" width="15.7" height="15.7" class="i-teal"/>
+<text x="412" y="179" class="h3">Every check gives a verdict</text>
+<text x="412" y="195" class="s">True, False or None (no evidence)</text>
+<path d="M374 214 H646" class="line" fill="none" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--hair)"/>
+<text x="374" y="238" class="b t2">no run error</text>
+<text x="457.8" y="238" class="s">always checked</text>
+<rect x="588.4" y="222" width="57.6" height="24" rx="12" class="f-green"/><text x="597.4" y="238" class="m x-green" style="font-size:11px">✓ True</text>
+<path d="M374 252 H646" class="line" fill="none" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--hair)"/>
+<text x="374" y="276" class="m">never refund()</text>
+<rect x="482.8" y="262" width="68" height="18" rx="9" class="f-rose"/><text x="491.8" y="274.4" class="b x-rose bold" style="font-size:9.5px">CRITICAL</text>
+<rect x="581.8" y="260" width="64.2" height="24" rx="12" class="f-rose"/><text x="590.8" y="276" class="m x-rose" style="font-size:11px">✗ False</text>
+<path d="M374 290 H646" class="line" fill="none" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--hair)"/>
+<text x="374" y="314" class="m">says ('30 days',)</text>
+<rect x="581.8" y="298" width="64.2" height="24" rx="12" class="f-rose"/><text x="590.8" y="314" class="m x-rose" style="font-size:11px">✗ False</text>
+<path d="M374 328 H646" class="line" fill="none" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--hair)"/>
+<rect x="374" y="340" width="57.6" height="22" rx="11" class="f-amber"/><text x="383" y="355" class="m x-amber" style="font-size:11px">? None</text>
+<text x="439.6" y="355" class="s">unknown: fails, never passes</text>
+<rect x="690" y="152" width="230" height="222" rx="12" class="panel sh"/>
+<rect x="690" y="152" width="230" height="222" rx="12" class="" style="fill: none; stroke: var(--rose-border)"/>
+<rect x="704" y="166" width="28" height="28" rx="7.8" class="f-rose"/><use href="#i-gavel" x="710.2" y="172.2" width="15.7" height="15.7" class="i-rose"/>
+<text x="742" y="179" class="h3">Grade</text>
+<text x="742" y="195" class="ms"><tspan class="t2">passed = </tspan><tspan class="x-rose bold">False</tspan></text>
+<text x="704" y="224" class="s">failed</text>
+<text x="782" y="224" class="ms t1">never refund()</text>
+<text x="782" y="240" class="ms t1">says ('30 days',)</text>
+<text x="704" y="270" class="s">unknown</text>
+<text x="782" y="270" class="ms t3">none</text>
+<text x="704" y="300" class="s">violations</text>
+<text x="782" y="300" class="ms x-rose bold">never refund()</text>
+<text x="704" y="358" class="s">pass = no fails and no unknowns</text>
+<path d="M336 197 H354" class="s-violet" fill="none" stroke-width="1.5" marker-end="url(#a-violet)" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M336 314 H354" class="s-slate" fill="none" stroke-width="1.5" marker-end="url(#a-slate)" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M666 263 H684" class="s-teal" fill="none" stroke-width="1.5" marker-end="url(#a-teal)" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="40" y="406" class="s"><tspan class="cap x-teal">2 · MANY GRADES, ONE SUMMARY</tspan><tspan class="s">     refund-desk example: 5 tasks × 10 trials per harness</tspan></text>
+<rect x="40" y="420" width="430" height="270" rx="12" class="panel sh"/>
+<rect x="56" y="434" width="69" height="24" rx="12" class="f-violet"/><use href="#i-bot" x="64" y="439.8" width="12.5" height="12.5" class="i-violet"/><text x="81.5" y="450.1" class="m x-violet" style="font-size:11.5px">agent</text>
+<text x="56" y="478" class="cap">TASK</text>
+<text x="188.5" y="478" class="cap" text-anchor="middle">0</text>
+<text x="209.5" y="478" class="cap" text-anchor="middle">1</text>
+<text x="230.5" y="478" class="cap" text-anchor="middle">2</text>
+<text x="251.5" y="478" class="cap" text-anchor="middle">3</text>
+<text x="272.5" y="478" class="cap" text-anchor="middle">4</text>
+<text x="293.5" y="478" class="cap" text-anchor="middle">5</text>
+<text x="314.5" y="478" class="cap" text-anchor="middle">6</text>
+<text x="335.5" y="478" class="cap" text-anchor="middle">7</text>
+<text x="356.5" y="478" class="cap" text-anchor="middle">8</text>
+<text x="377.5" y="478" class="cap" text-anchor="middle">9</text>
+<text x="454" y="478" class="cap" text-anchor="end">RATE</text>
+<text x="56" y="501" class="ms t1">refund-ok</text>
+<rect x="180" y="488" width="17" height="17" rx="4" class="f-green"/>
+<rect x="201" y="488" width="17" height="17" rx="4" class="f-green"/>
+<rect x="222" y="488" width="17" height="17" rx="4" class="f-green"/>
+<rect x="243" y="488" width="17" height="17" rx="4" class="f-green"/>
+<rect x="264" y="488" width="17" height="17" rx="4" class="f-green"/>
+<rect x="285" y="488" width="17" height="17" rx="4" class="f-green"/>
+<rect x="306" y="488" width="17" height="17" rx="4" class="f-green"/>
+<rect x="327" y="488" width="17" height="17" rx="4" class="f-green"/>
+<rect x="348" y="488" width="17" height="17" rx="4" class="f-green"/>
+<rect x="369" y="488" width="17" height="17" rx="4" class="f-green"/>
+<text x="454" y="501" class="m" text-anchor="end">1.0</text>
+<text x="56" y="525" class="ms t1">refund-late</text>
+<rect x="180" y="512" width="17" height="17" rx="4" class="f-green"/>
+<rect x="201" y="512" width="17" height="17" rx="4" class="f-green"/>
+<rect x="222" y="512" width="17" height="17" rx="4" class="k-rose"/>
+<text x="230.5" y="525" class="bold" text-anchor="middle" style="font-size: 12px; fill: var(--panel)">!</text>
+<rect x="243" y="512" width="17" height="17" rx="4" class="f-green"/>
+<rect x="264" y="512" width="17" height="17" rx="4" class="f-green"/>
+<rect x="285" y="512" width="17" height="17" rx="4" class="f-green"/>
+<rect x="306" y="512" width="17" height="17" rx="4" class="k-rose"/>
+<text x="314.5" y="525" class="bold" text-anchor="middle" style="font-size: 12px; fill: var(--panel)">!</text>
+<rect x="327" y="512" width="17" height="17" rx="4" class="f-green"/>
+<rect x="348" y="512" width="17" height="17" rx="4" class="f-green"/>
+<rect x="369" y="512" width="17" height="17" rx="4" class="f-green"/>
+<text x="454" y="525" class="m x-rose" text-anchor="end">0.8</text>
+<text x="56" y="549" class="ms t1">other-customer</text>
+<rect x="180" y="536" width="17" height="17" rx="4" class="f-green"/>
+<rect x="201" y="536" width="17" height="17" rx="4" class="f-green"/>
+<rect x="222" y="536" width="17" height="17" rx="4" class="f-green"/>
+<rect x="243" y="536" width="17" height="17" rx="4" class="f-green"/>
+<rect x="264" y="536" width="17" height="17" rx="4" class="f-green"/>
+<rect x="285" y="536" width="17" height="17" rx="4" class="f-green"/>
+<rect x="306" y="536" width="17" height="17" rx="4" class="f-green"/>
+<rect x="327" y="536" width="17" height="17" rx="4" class="f-green"/>
+<rect x="348" y="536" width="17" height="17" rx="4" class="f-green"/>
+<rect x="369" y="536" width="17" height="17" rx="4" class="f-green"/>
+<text x="454" y="549" class="m" text-anchor="end">1.0</text>
+<text x="56" y="573" class="ms t1">no-order-id</text>
+<rect x="180" y="560" width="17" height="17" rx="4" class="f-green"/>
+<rect x="201" y="560" width="17" height="17" rx="4" class="f-green"/>
+<rect x="222" y="560" width="17" height="17" rx="4" class="f-green"/>
+<rect x="243" y="560" width="17" height="17" rx="4" class="f-green"/>
+<rect x="264" y="560" width="17" height="17" rx="4" class="f-green"/>
+<rect x="285" y="560" width="17" height="17" rx="4" class="f-green"/>
+<rect x="306" y="560" width="17" height="17" rx="4" class="f-green"/>
+<rect x="327" y="560" width="17" height="17" rx="4" class="f-green"/>
+<rect x="348" y="560" width="17" height="17" rx="4" class="f-green"/>
+<rect x="369" y="560" width="17" height="17" rx="4" class="f-green"/>
+<text x="454" y="573" class="m" text-anchor="end">1.0</text>
+<text x="56" y="597" class="ms t1">policy-question</text>
+<rect x="180" y="584" width="17" height="17" rx="4" class="f-rose"/>
+<use href="#i-x" x="183.5" y="587.5" width="10" height="10" class="i-rose"/>
+<rect x="201" y="584" width="17" height="17" rx="4" class="f-green"/>
+<rect x="222" y="584" width="17" height="17" rx="4" class="f-green"/>
+<rect x="243" y="584" width="17" height="17" rx="4" class="f-green"/>
+<rect x="264" y="584" width="17" height="17" rx="4" class="f-rose"/>
+<use href="#i-x" x="267.5" y="587.5" width="10" height="10" class="i-rose"/>
+<rect x="285" y="584" width="17" height="17" rx="4" class="f-rose"/>
+<use href="#i-x" x="288.5" y="587.5" width="10" height="10" class="i-rose"/>
+<rect x="306" y="584" width="17" height="17" rx="4" class="f-green"/>
+<rect x="327" y="584" width="17" height="17" rx="4" class="f-green"/>
+<rect x="348" y="584" width="17" height="17" rx="4" class="f-green"/>
+<rect x="369" y="584" width="17" height="17" rx="4" class="f-green"/>
+<text x="454" y="597" class="m x-rose" text-anchor="end">0.7</text>
+<rect x="56" y="616" width="127.3" height="60" rx="8" class="code"/>
+<text x="66" y="633" class="cap">SUCCESS</text>
+<text x="66" y="655" class="bold t1" style="font-size: 18px">0.90</text>
+<text x="66" y="669" class="s" style="font-size: 10.5px">95% CI 0.78–1.00</text>
+<rect x="191.3" y="616" width="127.3" height="60" rx="8" class="code"/>
+<text x="201.3" y="633" class="cap">PASS^K, K = 10</text>
+<text x="201.3" y="655" class="bold t1" style="font-size: 18px">0.60</text>
+<text x="201.3" y="669" class="s" style="font-size: 10.5px">3 of 5 always pass</text>
+<rect x="326.7" y="616" width="127.3" height="60" rx="8" class="code"/>
+<text x="336.7" y="633" class="cap">VIOLATIONS</text>
+<text x="336.7" y="655" class="bold x-rose" style="font-size: 18px">2</text>
+<text x="336.7" y="669" class="s" style="font-size: 10.5px">refund-late × 2</text>
+<rect x="490" y="420" width="430" height="270" rx="12" class="panel sh"/>
+<rect x="506" y="434" width="89.7" height="24" rx="12" class="f-violet"/><use href="#i-flow" x="514" y="439.8" width="12.5" height="12.5" class="i-violet"/><text x="531.5" y="450.1" class="m x-violet" style="font-size:11.5px">workflow</text>
+<text x="506" y="478" class="cap">TASK</text>
+<text x="638.5" y="478" class="cap" text-anchor="middle">0</text>
+<text x="659.5" y="478" class="cap" text-anchor="middle">1</text>
+<text x="680.5" y="478" class="cap" text-anchor="middle">2</text>
+<text x="701.5" y="478" class="cap" text-anchor="middle">3</text>
+<text x="722.5" y="478" class="cap" text-anchor="middle">4</text>
+<text x="743.5" y="478" class="cap" text-anchor="middle">5</text>
+<text x="764.5" y="478" class="cap" text-anchor="middle">6</text>
+<text x="785.5" y="478" class="cap" text-anchor="middle">7</text>
+<text x="806.5" y="478" class="cap" text-anchor="middle">8</text>
+<text x="827.5" y="478" class="cap" text-anchor="middle">9</text>
+<text x="904" y="478" class="cap" text-anchor="end">RATE</text>
+<text x="506" y="501" class="ms t1">refund-ok</text>
+<rect x="630" y="488" width="17" height="17" rx="4" class="f-green"/>
+<rect x="651" y="488" width="17" height="17" rx="4" class="f-green"/>
+<rect x="672" y="488" width="17" height="17" rx="4" class="f-green"/>
+<rect x="693" y="488" width="17" height="17" rx="4" class="f-green"/>
+<rect x="714" y="488" width="17" height="17" rx="4" class="f-green"/>
+<rect x="735" y="488" width="17" height="17" rx="4" class="f-green"/>
+<rect x="756" y="488" width="17" height="17" rx="4" class="f-green"/>
+<rect x="777" y="488" width="17" height="17" rx="4" class="f-green"/>
+<rect x="798" y="488" width="17" height="17" rx="4" class="f-green"/>
+<rect x="819" y="488" width="17" height="17" rx="4" class="f-green"/>
+<text x="904" y="501" class="m" text-anchor="end">1.0</text>
+<text x="506" y="525" class="ms t1">refund-late</text>
+<rect x="630" y="512" width="17" height="17" rx="4" class="f-green"/>
+<rect x="651" y="512" width="17" height="17" rx="4" class="f-green"/>
+<rect x="672" y="512" width="17" height="17" rx="4" class="f-green"/>
+<rect x="693" y="512" width="17" height="17" rx="4" class="f-green"/>
+<rect x="714" y="512" width="17" height="17" rx="4" class="f-green"/>
+<rect x="735" y="512" width="17" height="17" rx="4" class="f-green"/>
+<rect x="756" y="512" width="17" height="17" rx="4" class="f-green"/>
+<rect x="777" y="512" width="17" height="17" rx="4" class="f-green"/>
+<rect x="798" y="512" width="17" height="17" rx="4" class="f-green"/>
+<rect x="819" y="512" width="17" height="17" rx="4" class="f-green"/>
+<text x="904" y="525" class="m" text-anchor="end">1.0</text>
+<text x="506" y="549" class="ms t1">other-customer</text>
+<rect x="630" y="536" width="17" height="17" rx="4" class="f-green"/>
+<rect x="651" y="536" width="17" height="17" rx="4" class="f-green"/>
+<rect x="672" y="536" width="17" height="17" rx="4" class="f-green"/>
+<rect x="693" y="536" width="17" height="17" rx="4" class="f-green"/>
+<rect x="714" y="536" width="17" height="17" rx="4" class="f-green"/>
+<rect x="735" y="536" width="17" height="17" rx="4" class="f-green"/>
+<rect x="756" y="536" width="17" height="17" rx="4" class="f-green"/>
+<rect x="777" y="536" width="17" height="17" rx="4" class="f-green"/>
+<rect x="798" y="536" width="17" height="17" rx="4" class="f-green"/>
+<rect x="819" y="536" width="17" height="17" rx="4" class="f-green"/>
+<text x="904" y="549" class="m" text-anchor="end">1.0</text>
+<text x="506" y="573" class="ms t1">no-order-id</text>
+<rect x="630" y="560" width="17" height="17" rx="4" class="f-green"/>
+<rect x="651" y="560" width="17" height="17" rx="4" class="f-green"/>
+<rect x="672" y="560" width="17" height="17" rx="4" class="f-green"/>
+<rect x="693" y="560" width="17" height="17" rx="4" class="f-green"/>
+<rect x="714" y="560" width="17" height="17" rx="4" class="f-green"/>
+<rect x="735" y="560" width="17" height="17" rx="4" class="f-green"/>
+<rect x="756" y="560" width="17" height="17" rx="4" class="f-green"/>
+<rect x="777" y="560" width="17" height="17" rx="4" class="f-green"/>
+<rect x="798" y="560" width="17" height="17" rx="4" class="f-green"/>
+<rect x="819" y="560" width="17" height="17" rx="4" class="f-green"/>
+<text x="904" y="573" class="m" text-anchor="end">1.0</text>
+<text x="506" y="597" class="ms t1">policy-question</text>
+<rect x="630" y="584" width="17" height="17" rx="4" class="f-rose"/>
+<use href="#i-x" x="633.5" y="587.5" width="10" height="10" class="i-rose"/>
+<rect x="651" y="584" width="17" height="17" rx="4" class="f-rose"/>
+<use href="#i-x" x="654.5" y="587.5" width="10" height="10" class="i-rose"/>
+<rect x="672" y="584" width="17" height="17" rx="4" class="f-rose"/>
+<use href="#i-x" x="675.5" y="587.5" width="10" height="10" class="i-rose"/>
+<rect x="693" y="584" width="17" height="17" rx="4" class="f-rose"/>
+<use href="#i-x" x="696.5" y="587.5" width="10" height="10" class="i-rose"/>
+<rect x="714" y="584" width="17" height="17" rx="4" class="f-rose"/>
+<use href="#i-x" x="717.5" y="587.5" width="10" height="10" class="i-rose"/>
+<rect x="735" y="584" width="17" height="17" rx="4" class="f-rose"/>
+<use href="#i-x" x="738.5" y="587.5" width="10" height="10" class="i-rose"/>
+<rect x="756" y="584" width="17" height="17" rx="4" class="f-rose"/>
+<use href="#i-x" x="759.5" y="587.5" width="10" height="10" class="i-rose"/>
+<rect x="777" y="584" width="17" height="17" rx="4" class="f-rose"/>
+<use href="#i-x" x="780.5" y="587.5" width="10" height="10" class="i-rose"/>
+<rect x="798" y="584" width="17" height="17" rx="4" class="f-rose"/>
+<use href="#i-x" x="801.5" y="587.5" width="10" height="10" class="i-rose"/>
+<rect x="819" y="584" width="17" height="17" rx="4" class="f-rose"/>
+<use href="#i-x" x="822.5" y="587.5" width="10" height="10" class="i-rose"/>
+<text x="904" y="597" class="m x-rose" text-anchor="end">0.0</text>
+<rect x="506" y="616" width="127.3" height="60" rx="8" class="code"/>
+<text x="516" y="633" class="cap">SUCCESS</text>
+<text x="516" y="655" class="bold t1" style="font-size: 18px">0.80</text>
+<text x="516" y="669" class="s" style="font-size: 10.5px">95% CI 0.40–1.00</text>
+<rect x="641.3" y="616" width="127.3" height="60" rx="8" class="code"/>
+<text x="651.3" y="633" class="cap">PASS^K, K = 10</text>
+<text x="651.3" y="655" class="bold t1" style="font-size: 18px">0.80</text>
+<text x="651.3" y="669" class="s" style="font-size: 10.5px">4 of 5 always pass</text>
+<rect x="776.7" y="616" width="127.3" height="60" rx="8" class="code"/>
+<text x="786.7" y="633" class="cap">VIOLATIONS</text>
+<text x="786.7" y="655" class="bold x-green" style="font-size: 18px">0</text>
+<text x="786.7" y="669" class="s" style="font-size: 10.5px">none</text>
+<rect x="40" y="700" width="15" height="15" rx="4" class="f-green"/>
+<text x="61" y="712" class="s">pass</text>
+<rect x="107.8" y="700" width="15" height="15" rx="4" class="f-rose"/>
+<use href="#i-x" x="110.8" y="703" width="9" height="9" class="i-rose"/>
+<text x="128.8" y="712" class="s">fail</text>
+<rect x="167.1" y="700" width="15" height="15" rx="4" class="k-rose"/>
+<text x="174.6" y="712" class="bold" text-anchor="middle" style="font-size: 11px; fill: var(--panel)">!</text>
+<text x="188.1" y="712" class="s">violation: a critical check failed</text>
+<text x="920" y="712" class="s" text-anchor="end">success = mean of task rates · the interval resamples tasks, not runs</text>
+<rect x="40" y="730" width="880" height="44" rx="12" class="f-amber"/>
+<use href="#i-scale" x="56" y="742" width="20" height="20" class="i-amber"/>
+<text x="86" y="757" class="b"><tspan class="t1 semi">The agent succeeds more often, but broke a critical rule twice. </tspan><tspan class="t2">The gate violations ≤ 0 decides.</tspan></text>
+</svg>
