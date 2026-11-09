@@ -7,13 +7,16 @@ Two harnesses for one small refund desk, evaluated on the same five tasks:
 - "workflow" is code: it parses the request and applies the policy with if-statements.
 
 The environment, not the harness, records every refund, and the checks read that record.
-The numbers this prints are from the simulation and say nothing about real models.
+The numbers this prints, cost and latency included, are from the simulation and say
+nothing about real models.
 """
 
 from __future__ import annotations
 
 import random
 import re
+import sys
+from pathlib import Path
 
 from harness_evals import (
     Action,
@@ -25,11 +28,12 @@ from harness_evals import (
     did,
     gate_failures,
     never,
+    pareto,
     run,
     says,
     summarize,
 )
-from harness_evals.report import comparison, table
+from harness_evals.report import comparison, frontier_svg, table
 
 ORDERS = {  # order id -> (owner, days since delivery, amount in cents)
     "A1": ("ana", 3, 4800),
@@ -51,6 +55,7 @@ USECASE = UseCase(
         Task("policy-question", "ana: can I still return order A1?", (says(r"\byes\b"),)),
     ],
     gates={"violations": ("<=", 0), "success": (">=", 0.8)},
+    guardrails={"latency_p95": ("<=", 1.0)},  # a candidate may be at most 1 s slower
 )
 
 
@@ -99,7 +104,20 @@ def adapter(harness):
             desk = Desk()
             rng = random.Random(f"{harness.__name__}/{t.id}/{trial}")
             reply = harness(desk, t.input, rng)
-            out.append(Episode(t.id, reply=reply, actions=desk.log, cost_usd=0.0, latency_s=0.1))
+            # Simulated usage: the agent makes several model calls, the workflow one.
+            calls = 1 if harness is workflow else rng.randint(2, 5)
+            out.append(
+                Episode(
+                    t.id,
+                    reply=reply,
+                    actions=desk.log,
+                    cost_usd=0.00006 * calls,
+                    latency_s=round(0.5 + 1.4 * calls * rng.uniform(0.8, 1.2), 2),
+                    model_calls=calls,
+                    input_tokens=900 * calls,
+                    output_tokens=60 * calls,
+                )
+            )
         return out
 
     return run_tasks
@@ -118,5 +136,8 @@ if __name__ == "__main__":
     print(table(summaries))
     for h, s in summaries.items():
         print(f"{h} misses the bar: {gate_failures(s, USECASE.gates) or 'nothing'}")
+    print("Frontier, success against cost:", pareto(summaries, "cost_per_task", "success"))
     print()
     print(comparison(compare(USECASE, by["agent"], by["workflow"])))
+    if len(sys.argv) > 1:  # python examples/refund_desk.py frontier.svg
+        Path(sys.argv[1]).write_text(frontier_svg(summaries, "cost_per_task", "success"))

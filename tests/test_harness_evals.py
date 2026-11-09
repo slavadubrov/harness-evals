@@ -26,6 +26,7 @@ from harness_evals import (
     load,
     never,
     never_says,
+    pareto,
     pass_at_k,
     pass_hat_k,
     run,
@@ -470,6 +471,8 @@ def test_the_cli_summarizes_and_compares_saved_episodes(tmp_path, capsys, monkey
     )
     out = capsys.readouterr().out
     assert "| workflow |" in out and "Decision:" in out
+    main(["frontier", path, "--usecase", "refund_desk", "--x", "latency_p95"])
+    assert capsys.readouterr().out.startswith("<svg")
 
 
 @pytest.mark.parametrize("change", ["model", "checks", "version", "missing", "none"])
@@ -513,3 +516,247 @@ def test_cli_checks_manifests_before_comparing(tmp_path, monkeypatch, change):
     else:
         with pytest.raises(SystemExit, match="manifest|not comparable"):
             main(args)
+
+
+# -- several metrics, their intervals and the frontier ----------------------------------
+
+
+def test_cost_and_latency_intervals_resample_whole_tasks():
+    uc, gs = grades_for({"a": [True, True], "b": [True, True]})
+    for g in gs:  # task a costs 1 per run and takes 1 s; task b costs 3 and takes 3 s
+        g.episode.cost_usd = g.episode.latency_s = 1.0 if g.episode.task_id == "a" else 3.0
+    s = summarize(gs)
+    assert s["cost_per_task"] == 2.0 and s["latency_p50"] == 1.0
+    # A resample of [a, a] costs 1 and one of [b, b] costs 3: both happen in 2,000 draws.
+    assert s["cost_per_task_ci"] == (1.0, 3.0) and s["latency_p95_ci"] == (1.0, 3.0)
+    assert s["pass^k_ci"] == s["success_ci"] == (1.0, 1.0)
+
+
+def test_calls_and_tokens_per_task_are_unknown_until_every_run_reports_them():
+    _, gs = grades_for({"a": [True, True], "b": [True, True]})
+    for i, g in enumerate(gs):
+        g.episode.model_calls, g.episode.input_tokens, g.episode.output_tokens = i, 100, 10 * i
+    s = summarize(gs)
+    assert s["calls_per_task"] == 1.5 and s["tokens_per_task"] == 115.0
+    assert s["calls_per_task_ci"][0] <= 1.5 <= s["calls_per_task_ci"][1]
+    gs[0].episode.output_tokens = None
+    s = summarize(gs)
+    assert s["tokens_per_task"] is None and s["tokens_per_task_ci"] is None
+
+
+def test_use_case_metrics_get_an_interval_and_unknown_ones_get_none():
+    _, gs = grades_for({"a": [True, False], "b": [True, True]})
+    s = summarize(gs, {"replies": lambda grades: 1.0, "never": lambda grades: None})
+    assert s["replies_ci"] == (1.0, 1.0) and s["never_ci"] is None
+    with pytest.raises(ValueError, match="required metric"):
+        summarize(gs, {"latency_p50_ci": lambda grades: 0.0})
+
+
+def test_the_frontier_keeps_every_harness_that_no_other_beats_on_both_metrics():
+    sums = {
+        "agent": {"success": 0.9, "cost_per_task": 0.3},
+        "workflow": {"success": 0.8, "cost_per_task": 0.1},
+        "router": {"success": 0.7, "cost_per_task": 0.2},  # the workflow beats it on both
+        "twin": {"success": 0.9, "cost_per_task": 0.3},  # a tie beats nobody
+        "unpriced": {"success": 1.0, "cost_per_task": None},
+    }
+    assert pareto(sums, "cost_per_task", "success") == ["agent", "workflow", "twin"]
+    calls = {"a": {"success": 0.9, "calls": 4.0}, "b": {"success": 0.9, "calls": 1.0}}
+    assert pareto(calls, "calls", "success") == ["a"]
+    assert pareto(calls, "calls", "success", lower=["calls"]) == ["b"]
+
+
+def test_comparisons_report_paired_intervals_for_cost_latency_and_use_case_metrics():
+    uc, base = grades_for({f"t{i}": [True] * 3 for i in range(6)}, "base", cost=0.01)
+    _, cand = grades_for({f"t{i}": [True] * 3 for i in range(6)}, "cand", cost=0.002)
+    uc.metrics = {"calls": lambda grades: 2.0}
+    c = compare(uc, base, cand)
+    assert set(c.deltas) == {"success", "calls", "cost_per_task", "latency_p50", "latency_p95"} | {
+        "calls_per_task",
+        "tokens_per_task",
+    }
+    assert c.deltas["tokens_per_task"] is None  # these episodes report no token counts
+    diff, (lo, hi) = c.deltas["cost_per_task"]
+    assert diff == pytest.approx(-0.008) and lo == pytest.approx(-0.008) == hi
+    assert c.deltas["latency_p95"] == (0.0, (0.0, 0.0))
+
+
+def test_cheaper_means_the_whole_cost_interval_lies_below_zero():
+    uc, base = grades_for({f"t{i}": [True] * 2 for i in range(8)}, "base")
+    _, cand = grades_for({f"t{i}": [True] * 2 for i in range(8)}, "cand")
+    for i, g in enumerate(cand):  # cheaper on average, dearer on half the tasks
+        g.episode.cost_usd = 0.0001 if i % 4 < 2 else 0.0017
+    for g in base:
+        g.episode.cost_usd = 0.001
+    assert compare(uc, base, cand).decision == "inconclusive"
+    for g in cand:
+        g.episode.cost_usd = 0.0005
+    assert compare(uc, base, cand).decision == "adopt"
+
+
+def test_a_guardrail_rejects_a_cheaper_candidate_that_is_clearly_slower():
+    uc, base = grades_for({f"t{i}": [True] * 3 for i in range(6)}, "base", cost=0.01)
+    _, cand = grades_for({f"t{i}": [True] * 3 for i in range(6)}, "cand", cost=0.001)
+    for g in cand:
+        g.episode.latency_s = 6.0  # the base takes 1 s
+    assert compare(uc, base, cand).decision == "adopt"
+    uc.guardrails = {"latency_p95": ("<=", 2.0)}
+    c = compare(uc, base, cand)
+    assert c.decision == "reject" and c.reasons[0].startswith("latency_p95 changes by +5.00")
+
+
+def test_a_guardrail_that_the_interval_may_cross_keeps_the_base():
+    uc, base = grades_for({f"t{i}": [True] * 2 for i in range(10)}, "base", cost=0.01)
+    _, cand = grades_for({f"t{i}": [True] * 2 for i in range(10)}, "cand", cost=0.001)
+    for i, g in enumerate(cand):  # slower on some tasks only: the interval spans the limit
+        g.episode.latency_s = 4.0 if i < 6 else 1.0
+    uc.guardrails = {"latency_p50": ("<=", 1.0)}
+    c = compare(uc, base, cand)
+    assert c.decision == "inconclusive" and "may pass its limit" in c.reasons[-1]
+
+
+def test_a_guardrail_on_a_metric_that_could_not_be_compared_keeps_the_base():
+    uc, base = grades_for({"a": [True, True]}, "base", cost=0.01)
+    _, cand = grades_for({"a": [True, True]}, "cand", cost=0.001)
+    cand[0].episode.latency_s = None
+    uc.guardrails = {"latency_p95": ("<=", 2.0)}
+    c = compare(uc, base, cand)
+    assert c.decision == "inconclusive" and c.reasons[-1] == "latency_p95 could not be compared"
+
+
+@pytest.mark.parametrize(
+    "guardrail",
+    [{"unheard_of": ("<=", 1.0)}, {"latency_p95": ("<", 1.0)}, {"success": (">=", float("-inf"))}],
+)
+def test_guardrails_need_a_comparable_metric_an_operator_and_a_finite_limit(guardrail):
+    with pytest.raises(ValueError, match="guardrail"):
+        UseCase("u", [task(state())], guardrails=guardrail)
+
+
+def test_the_frontier_plot_draws_every_harness_its_intervals_and_the_frontier():
+    import xml.etree.ElementTree as ET
+
+    from harness_evals.report import frontier_svg
+
+    uc, a = grades_for({f"t{i}": [True, i > 0] for i in range(5)}, "agent", cost=0.0003)
+    _, w = grades_for({f"t{i}": [i > 1] * 2 for i in range(5)}, "workflow", cost=0.00005)
+    sums = {"agent": summarize(a), "workflow": summarize(w)}
+    svg = ET.fromstring(frontier_svg(sums, "cost_per_task", "success", title="Success <> cost"))
+    ns = {"s": "http://www.w3.org/2000/svg"}
+    assert svg.find("s:title", ns).text == "Success <> cost"
+    assert len(svg.findall("s:circle", ns)) == 2
+    assert len(svg.find("s:polyline", ns).get("points").split()) == 2  # both on the frontier
+    labels = [t.text for t in svg.findall("s:text", ns)]
+    assert {"agent", "workflow", "cost_per_task", "success"} <= set(labels)
+    with pytest.raises(ValueError, match="no harness"):
+        frontier_svg(sums, "cost_per_task", "unmeasured")
+
+
+def test_the_table_shows_each_interval_beside_its_value():
+    from harness_evals.report import table
+
+    _, gs = grades_for({"a": [True, True], "b": [True, False]})
+    row = table({"h": summarize(gs)}).splitlines()[-1]
+    assert "| $0.00100 (0.00100–0.00100) |" in row and "| 1.00 (1.00–1.00) |" in row
+
+
+def test_a_metric_undefined_or_failing_on_some_resamples_does_not_break_the_summary():
+    _, gs = grades_for({"a": [True, True], "b": [False, False], "c": [False, False]})
+
+    def share_of_refunds(grades):  # raises when the resample holds no task "a"
+        hits = [g.passed for g in grades if g.episode.task_id == "a"]
+        return sum(hits) / len(hits)
+
+    s = summarize(gs, {"refunds named": share_of_refunds})
+    assert s["refunds named"] == 1.0
+    # Task "a" is missing from about 30% of resamples: too many to ignore, so no interval.
+    assert s["refunds named_ci"] is None
+
+
+def test_an_interval_is_unknown_when_more_than_one_tail_of_resamples_is_undefined():
+    tasks = {f"t{i}": [i == 0] * 2 for i in range(10)}  # only one task ever passes
+    _, gs = grades_for(tasks)
+    s = summarize(gs)
+    assert s["cost_per_success"] == pytest.approx(0.01)
+    assert s["cost_per_success_ci"] is None  # most resamples have no passing run
+
+
+def test_a_guardrail_that_may_break_is_named_when_it_blocks_a_gain():
+    uc, base = grades_for({f"t{i}": [False] * 2 for i in range(10)}, "base")
+    _, cand = grades_for({f"t{i}": [True] * 2 for i in range(10)}, "cand")
+    for i, g in enumerate(cand):
+        g.episode.latency_s = 4.0 if i < 6 else 1.0
+    uc.guardrails = {"latency_p50": ("<=", 1.0)}
+    c = compare(uc, base, cand)
+    assert c.decision == "inconclusive"
+    assert c.reasons[0].startswith("success is higher") and "guardrail may break" in c.reasons[0]
+
+
+def test_a_base_that_misses_a_gate_is_replaced_before_guardrails_apply():
+    uc, base = grades_for({f"t{i}": [True] * 2 for i in range(5)}, "base")
+    _, cand = grades_for({f"t{i}": [True] * 2 for i in range(5)}, "cand")
+    for g in base:
+        g.episode.cost_usd = 1.0
+    for g in cand:
+        g.episode.latency_s = 9.0
+    uc.gates, uc.guardrails = {"cost_per_task": ("<=", 0.5)}, {"latency_p95": ("<=", 1.0)}
+    assert compare(uc, base, cand).decision == "adopt"
+
+
+def test_decide_never_calls_a_candidate_cheaper_while_a_cost_is_unknown():
+    from harness_evals import decide
+
+    uc, base = grades_for({"a": [True, True]}, "base", cost=0.01)
+    _, cand = grades_for({"a": [True, True]}, "cand", cost=0.001)
+    sb, sc = summarize(base), summarize(cand)
+    sc["unknown_cost"] = 1
+    deltas = {"success": (0.0, (0.0, 0.0)), "cost_per_task": (-0.009, (-0.009, -0.009))}
+    assert decide(uc, sb, sc, deltas)[0] == "inconclusive"
+
+
+@pytest.mark.parametrize("name", ["foo_ci", "latency_p95"])
+def test_custom_metric_names_cannot_shadow_required_metrics_or_intervals(name):
+    _, gs = grades_for({"a": [True]})
+    with pytest.raises(ValueError, match="replaces"):
+        summarize(gs, {name: lambda grades: 1.0})
+
+
+def test_malformed_guardrails_get_a_clear_error():
+    for bad in ({"latency_p95": "<= 2"}, {"latency_p95": ("<=",)}, {"latency_p95": ("<=", "2")}):
+        with pytest.raises(ValueError, match="guardrail"):
+            UseCase("u", [task(state())], guardrails=bad)
+
+
+def test_the_frontier_command_takes_lower_is_better_metrics_and_reports_unknown_ones(
+    tmp_path, capsys, monkeypatch
+):
+    from types import SimpleNamespace
+
+    from harness_evals.cli import main
+
+    uc = UseCase("u", [task(state())], metrics={"tool calls": lambda gs: gs[0].episode.extra["n"]})
+    monkeypatch.setitem(sys.modules, "frontier_usecase", SimpleNamespace(USECASE=uc))
+    path = tmp_path / "episodes.jsonl"
+    save(
+        [
+            Episode("t", "busy", 0, state_ok=True, extra={"n": 9.0}),
+            Episode("t", "lean", 0, state_ok=True, extra={"n": 1.0}),
+        ],
+        path,
+    )
+    args = ["frontier", str(path), "--usecase", "frontier_usecase", "--x", "tool calls"]
+    main([*args, "--lower", "tool calls"])
+    svg = capsys.readouterr().out
+    assert svg.count('fill="#c2185b">lean</text>') == 1 and 'fill="#444">busy</text>' in svg
+    with pytest.raises(SystemExit, match="frontier"):
+        main([*args[:-1], "unmeasured"])
+
+
+def test_integer_latencies_from_json_keep_their_interval_in_the_table():
+    from harness_evals.report import table
+
+    _, gs = grades_for({"a": [True, True]})
+    for g in gs:
+        g.episode.latency_s = 2  # an int, as json.loads returns for 2
+    row = table({"h": summarize(gs)}).splitlines()[-1]
+    assert "| 2.00 (2.00–2.00) |" in row
