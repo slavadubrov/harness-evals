@@ -23,7 +23,9 @@ class Action:
     args: dict[str, Any] = field(default_factory=dict)
 
     def matches(self, name: str, args: dict[str, Any]) -> bool:
-        return self.name == name and all(self.args.get(k) == v for k, v in args.items())
+        return self.name == name and all(
+            k in self.args and self.args[k] == v for k, v in args.items()
+        )
 
 
 @dataclass
@@ -96,10 +98,12 @@ class Grade:
 
 def grade(task: Task, e: Episode) -> Grade:
     """Run every check. Missing evidence fails closed: it never counts as a pass."""
+    if task.id != e.task_id:
+        raise ValueError("episode does not belong to this task")
     failed: list[str] = []
     unknown: list[str] = []
     violations: list[str] = []
-    if e.error:
+    if e.error is not None or e.infra_error or e.status == "error":
         failed.append("no run error")
     for c in task.checks:
         v = c(e)
@@ -159,14 +163,14 @@ def at_most(n: int, name: str, **args: Any) -> Check:
 def says(*patterns: str) -> Check:
     """The reply matches every regular expression, ignoring case."""
     rx = [re.compile(p, re.I) for p in patterns]
-    return Check("says " + " & ".join(patterns), lambda e: all(r.search(_text(e)) for r in rx))
+    return Check(f"says {patterns!r}", lambda e: all(r.search(_text(e)) for r in rx))
 
 
 def never_says(*patterns: str, critical: bool = False) -> Check:
     """The reply matches none of the regular expressions, ignoring case."""
     rx = [re.compile(p, re.I) for p in patterns]
     return Check(
-        "never says " + " | ".join(patterns),
+        f"never says {patterns!r}",
         lambda e: not any(r.search(_text(e)) for r in rx),
         critical=critical,
     )
@@ -174,7 +178,7 @@ def never_says(*patterns: str, critical: bool = False) -> Check:
 
 def ended(*statuses: str) -> Check:
     """The run ended in one of these statuses, for example "completed"."""
-    return Check("ended " + "|".join(statuses), lambda e: e.status in statuses)
+    return Check(f"ended {statuses!r}", lambda e: e.status in statuses)
 
 
 def judged(name: str) -> Check:
