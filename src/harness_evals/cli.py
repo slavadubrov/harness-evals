@@ -32,6 +32,12 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--candidate", help="harness name to compare")
     p.add_argument("--x", default="cost_per_task", help="frontier: metric on the x axis")
     p.add_argument("--y", default="success", help="frontier: metric on the y axis")
+    p.add_argument(
+        "--lower",
+        action="append",
+        default=[],
+        help="frontier: a custom metric where less is better",
+    )
     a = p.parse_args(argv)
 
     uc = _usecase(a.usecase)
@@ -70,7 +76,10 @@ def main(argv: list[str] | None = None) -> None:
         return
     sums = {h: summarize(gs, uc.metrics) for h, gs in grades.items()}
     if a.command == "frontier":  # an SVG on stdout: harness-evals frontier ... > plot.svg
-        print(frontier_svg(sums, a.x, a.y), end="")
+        try:
+            print(frontier_svg(sums, a.x, a.y, lower=a.lower), end="")
+        except ValueError as exc:
+            raise SystemExit(f"frontier: {exc}") from None
     else:
         print(table(sums, list(uc.metrics)))
 

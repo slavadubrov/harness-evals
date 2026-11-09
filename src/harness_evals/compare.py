@@ -20,7 +20,7 @@ from harness_evals.metrics import (
     summarize,
     task_rates,
 )
-from harness_evals.usecase import UseCase
+from harness_evals.usecase import UseCase, check_guardrails
 
 OPS = {">=": operator.ge, "<=": operator.le}
 Delta = tuple[float, tuple[float, float]]  # candidate minus base, and its 95% interval
@@ -127,11 +127,14 @@ def decide(
 ) -> tuple[str, list[str]]:
     """The adoption rule. Without clear evidence for the candidate, keep the base.
 
-    Success and cost per task are the metrics a candidate may win on; ``guardrails`` are
-    metrics it may not lose on by more than their limits. ``deltas`` holds candidate minus
-    base with a paired interval for success and for every guardrail."""
+    The gates come first: a base that misses one is replaced by any candidate that clears
+    them all. Between two harnesses that clear the gates, success and cost per task are
+    what a candidate may win on, and ``guardrails`` limit how much other metrics may get
+    worse. ``deltas`` holds candidate minus base with a paired interval for success, cost
+    per task and every guardrail; compare() computes it."""
     if not isfinite(usecase.margin) or usecase.margin < 0:
         raise ValueError("margin must be finite and nonnegative")
+    check_guardrails(usecase.guardrails, usecase.metrics)
     if missed := gate_failures(sc, usecase.gates):
         return "reject", missed
     if sc["violations"] > sb["violations"]:
@@ -155,19 +158,25 @@ def decide(
             unsure.append(f"{span}, which may pass its limit {op} {limit:+g}")
     if worse:
         return "reject", worse
-    if not unsure and lo > 0:
-        return "adopt", [f"success is higher: {lo:+.3f} to {hi:+.3f}"]
     cost = deltas.get("cost_per_task")
-    if not unsure and lo >= -m and cost is not None and cost[1][1] < 0:
+    known = not (sb.get("unknown_cost") or sc.get("unknown_cost"))
+    if lo > 0:
+        win = f"success is higher: {lo:+.3f} to {hi:+.3f}"
+    elif lo >= -m and known and cost is not None and cost[1][1] < 0:
         clo, chi = cost[1]
-        return "adopt", [
+        win = (
             f"no worse than -{m:g} ({lo:+.3f} to {hi:+.3f}) and cheaper per task"
             f" ({_num('cost_per_task', clo)} to {_num('cost_per_task', chi)})"
+        )
+    else:
+        return "inconclusive", [
+            f"success difference {lo:+.3f} to {hi:+.3f} does not establish a benefit;"
+            " keep the base",
+            *unsure,
         ]
-    return "inconclusive", [
-        f"success difference {lo:+.3f} to {hi:+.3f} does not establish a benefit; keep the base",
-        *unsure,
-    ]
+    if unsure:
+        return "inconclusive", [f"{win}, but a guardrail may break; keep the base", *unsure]
+    return "adopt", [win]
 
 
 def _num(name: str, v: float) -> str:

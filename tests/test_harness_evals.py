@@ -658,3 +658,105 @@ def test_the_table_shows_each_interval_beside_its_value():
     _, gs = grades_for({"a": [True, True], "b": [True, False]})
     row = table({"h": summarize(gs)}).splitlines()[-1]
     assert "| $0.00100 (0.00100–0.00100) |" in row and "| 1.00 (1.00–1.00) |" in row
+
+
+def test_a_metric_undefined_or_failing_on_some_resamples_does_not_break_the_summary():
+    _, gs = grades_for({"a": [True, True], "b": [False, False], "c": [False, False]})
+
+    def share_of_refunds(grades):  # raises when the resample holds no task "a"
+        hits = [g.passed for g in grades if g.episode.task_id == "a"]
+        return sum(hits) / len(hits)
+
+    s = summarize(gs, {"refunds named": share_of_refunds})
+    assert s["refunds named"] == 1.0
+    # Task "a" is missing from about 30% of resamples: too many to ignore, so no interval.
+    assert s["refunds named_ci"] is None
+
+
+def test_an_interval_is_unknown_when_more_than_one_tail_of_resamples_is_undefined():
+    tasks = {f"t{i}": [i == 0] * 2 for i in range(10)}  # only one task ever passes
+    _, gs = grades_for(tasks)
+    s = summarize(gs)
+    assert s["cost_per_success"] == pytest.approx(0.01)
+    assert s["cost_per_success_ci"] is None  # most resamples have no passing run
+
+
+def test_a_guardrail_that_may_break_is_named_when_it_blocks_a_gain():
+    uc, base = grades_for({f"t{i}": [False] * 2 for i in range(10)}, "base")
+    _, cand = grades_for({f"t{i}": [True] * 2 for i in range(10)}, "cand")
+    for i, g in enumerate(cand):
+        g.episode.latency_s = 4.0 if i < 6 else 1.0
+    uc.guardrails = {"latency_p50": ("<=", 1.0)}
+    c = compare(uc, base, cand)
+    assert c.decision == "inconclusive"
+    assert c.reasons[0].startswith("success is higher") and "guardrail may break" in c.reasons[0]
+
+
+def test_a_base_that_misses_a_gate_is_replaced_before_guardrails_apply():
+    uc, base = grades_for({f"t{i}": [True] * 2 for i in range(5)}, "base")
+    _, cand = grades_for({f"t{i}": [True] * 2 for i in range(5)}, "cand")
+    for g in base:
+        g.episode.cost_usd = 1.0
+    for g in cand:
+        g.episode.latency_s = 9.0
+    uc.gates, uc.guardrails = {"cost_per_task": ("<=", 0.5)}, {"latency_p95": ("<=", 1.0)}
+    assert compare(uc, base, cand).decision == "adopt"
+
+
+def test_decide_never_calls_a_candidate_cheaper_while_a_cost_is_unknown():
+    from harness_evals import decide
+
+    uc, base = grades_for({"a": [True, True]}, "base", cost=0.01)
+    _, cand = grades_for({"a": [True, True]}, "cand", cost=0.001)
+    sb, sc = summarize(base), summarize(cand)
+    sc["unknown_cost"] = 1
+    deltas = {"success": (0.0, (0.0, 0.0)), "cost_per_task": (-0.009, (-0.009, -0.009))}
+    assert decide(uc, sb, sc, deltas)[0] == "inconclusive"
+
+
+@pytest.mark.parametrize("name", ["foo_ci", "latency_p95"])
+def test_custom_metric_names_cannot_shadow_required_metrics_or_intervals(name):
+    _, gs = grades_for({"a": [True]})
+    with pytest.raises(ValueError, match="replaces"):
+        summarize(gs, {name: lambda grades: 1.0})
+
+
+def test_malformed_guardrails_get_a_clear_error():
+    for bad in ({"latency_p95": "<= 2"}, {"latency_p95": ("<=",)}, {"latency_p95": ("<=", "2")}):
+        with pytest.raises(ValueError, match="guardrail"):
+            UseCase("u", [task(state())], guardrails=bad)
+
+
+def test_the_frontier_command_takes_lower_is_better_metrics_and_reports_unknown_ones(
+    tmp_path, capsys, monkeypatch
+):
+    from types import SimpleNamespace
+
+    from harness_evals.cli import main
+
+    uc = UseCase("u", [task(state())], metrics={"tool calls": lambda gs: gs[0].episode.extra["n"]})
+    monkeypatch.setitem(sys.modules, "frontier_usecase", SimpleNamespace(USECASE=uc))
+    path = tmp_path / "episodes.jsonl"
+    save(
+        [
+            Episode("t", "busy", 0, state_ok=True, extra={"n": 9.0}),
+            Episode("t", "lean", 0, state_ok=True, extra={"n": 1.0}),
+        ],
+        path,
+    )
+    args = ["frontier", str(path), "--usecase", "frontier_usecase", "--x", "tool calls"]
+    main([*args, "--lower", "tool calls"])
+    svg = capsys.readouterr().out
+    assert svg.count('fill="#c2185b">lean</text>') == 1 and 'fill="#444">busy</text>' in svg
+    with pytest.raises(SystemExit, match="frontier"):
+        main([*args[:-1], "unmeasured"])
+
+
+def test_integer_latencies_from_json_keep_their_interval_in_the_table():
+    from harness_evals.report import table
+
+    _, gs = grades_for({"a": [True, True]})
+    for g in gs:
+        g.episode.latency_s = 2  # an int, as json.loads returns for 2
+    row = table({"h": summarize(gs)}).splitlines()[-1]
+    assert "| 2.00 (2.00–2.00) |" in row

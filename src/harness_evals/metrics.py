@@ -169,9 +169,10 @@ def task_interval(
     level: float = 0.95,
 ) -> tuple[float, float] | None:
     """Percentile interval of ``metric`` on the pooled runs of ``n`` resamples of whole
-    tasks. Resamples where the metric is undefined are skipped; None if it never is."""
-    values = [metric(_flat(tasks, idx)) for idx in _draws(len(tasks), n, seed)]
-    return _percentiles([v for v in values if v is not None], level)
+    tasks. A metric that groups runs by task sees a task drawn twice as one task, so give
+    use-case metrics a per-run definition, such as a share or a mean over runs."""
+    values = [_safe(metric, _flat(tasks, idx)) for idx in _draws(len(tasks), n, seed)]
+    return _percentiles(values, level)
 
 
 def paired_interval(
@@ -187,9 +188,8 @@ def paired_interval(
     same order, and each resample draws the same tasks for both harnesses."""
     diffs = []
     for idx in _draws(len(base), n, seed):
-        b, c = metric(_flat(base, idx)), metric(_flat(candidate, idx))
-        if b is not None and c is not None:
-            diffs.append(c - b)
+        b, c = _safe(metric, _flat(base, idx)), _safe(metric, _flat(candidate, idx))
+        diffs.append(None if b is None or c is None else c - b)
     return _percentiles(diffs, level)
 
 
@@ -203,11 +203,23 @@ def _flat(tasks: Tasks, idx: Sequence[int]) -> list[Grade]:
     return [g for i in idx for g in tasks[i]]
 
 
-def _percentiles(values: list[float], level: float) -> tuple[float, float] | None:
-    if not values:
+def _safe(metric: Metric, grades: list[Grade]) -> float | None:
+    """A metric that cannot be computed on a resample, such as a share of no runs, is
+    undefined there rather than an error."""
+    try:
+        return metric(grades)
+    except (ArithmeticError, ValueError):
         return None
-    s, n = sorted(values), len(values)
-    return s[int((1 - level) / 2 * n)], s[min(n - 1, int((1 + level) / 2 * n))]
+
+
+def _percentiles(values: Sequence[float | None], level: float) -> tuple[float, float] | None:
+    """The middle ``level`` of the values. Undefined values (None) may fill at most one
+    tail: if more resamples are undefined than that, the interval is unknown too."""
+    known = sorted(v for v in values if v is not None)
+    if not known or len(values) - len(known) > (1 - level) / 2 * len(values):
+        return None
+    n = len(known)
+    return known[int((1 - level) / 2 * n)], known[min(n - 1, int((1 + level) / 2 * n))]
 
 
 def summarize(
@@ -238,8 +250,8 @@ def summarize(
         "models": sorted({m for e in eps for m in e.models}),
     }
     for name, fn in (metrics or {}).items():
-        if name in s or name.removesuffix("_ci") in s:
-            raise ValueError(f"custom metric {name!r} replaces a required metric")
+        if name in s or name.endswith("_ci"):
+            raise ValueError(f"custom metric {name!r} replaces a required metric or interval")
         s[name] = fn(runs)
     s["pass^k_ci"] = bootstrap(list(per_task(grades, "pass^k", k).values()), seed=seed)
     for name in [*POOLED, *(metrics or {})]:

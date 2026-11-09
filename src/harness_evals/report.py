@@ -36,8 +36,9 @@ def _fmt(key: str, v: Any, s: Mapping[str, Any]) -> str:
         return "unknown"
     if key == "pass^k":
         return f"{v:.2f} (k={s['trials']})"
-    if not isinstance(v, float):
-        return str(v)
+    numeric = isinstance(v, int | float) and not isinstance(v, bool)
+    if not numeric or (isinstance(v, int) and f"{key}_ci" not in s):
+        return str(v)  # counts such as violations
     out = _num(key, v)
     if ci := s.get(f"{key}_ci"):
         out += f" ({_num(key, ci[0]).lstrip('$')}–{_num(key, ci[1]).lstrip('$')})"
@@ -47,7 +48,8 @@ def _fmt(key: str, v: Any, s: Mapping[str, Any]) -> str:
 
 
 def table(summaries: Mapping[str, Mapping[str, Any]], extra: list[str] | None = None) -> str:
-    """One row per harness; a value in brackets is its 95% interval over tasks."""
+    """One row per harness. A rate, cost, latency or usage value is followed by its 95%
+    interval over tasks in brackets; pass^k is followed by its k."""
     cols = REQUIRED + [(k, k) for k in extra or []]
     lines = [
         "| Harness | " + " | ".join(label for _, label in cols) + " |",
@@ -94,8 +96,8 @@ def frontier_svg(
     lower: Iterable[str] = (),
     title: str = "",
 ) -> str:
-    """Every harness on two metrics, with each metric's 95% interval as an error bar and
-    a line through the harnesses no other beats on both (metrics.pareto)."""
+    """Every harness that has both metrics, with each metric's 95% interval as an error
+    bar and a line through the frontier (metrics.pareto). Others are left out."""
     pts = {h: s for h, s in summaries.items() if s.get(x) is not None and s.get(y) is not None}
     if not pts:
         raise ValueError(f"no harness has both {x} and {y}")
@@ -125,9 +127,9 @@ def frontier_svg(
             f'<path d="M{px(vx):.1f} {top}V{h - bottom}M{left} {py(vy):.1f}H{w - right}" '
             f'stroke="#e6e6e6"/>',
             f'<text x="{px(vx):.1f}" y="{h - bottom + 18}" text-anchor="middle" fill="#666">'
-            f"{_tick(vx, x1)}</text>",
+            f"{_tick(vx, x1 - x0)}</text>",
             f'<text x="{left - 8}" y="{py(vy) + 4:.1f}" text-anchor="end" fill="#666">'
-            f"{_tick(vy, y1)}</text>",
+            f"{_tick(vy, y1 - y0)}</text>",
         ]
     o += [
         f'<text x="{(left + w - right) / 2}" y="{h - 14}" text-anchor="middle">{escape(x)}</text>',
@@ -161,11 +163,12 @@ def frontier_svg(
 
 
 def _axis(pts: Mapping[str, Mapping[str, Any]], m: str) -> tuple[float, float]:
-    """From zero, or a nice negative bound, to a nice upper bound over values and intervals."""
+    """From a nice bound below the values and intervals, or zero, to one above, or zero."""
     vals = [v for s in pts.values() for v in (s[m], *(s.get(f"{m}_ci") or ()))]
     lo, hi = min(vals), max(vals)
-    top = _nice(hi) if hi > 0 else 1.0
-    return (-_nice(-lo) if lo < 0 else 0.0), top
+    bottom = -_nice(-lo) if lo < 0 else 0.0
+    top = _nice(hi) if hi > 0 else 0.0
+    return (bottom, top) if top > bottom else (0.0, 1.0)
 
 
 def _nice(v: float) -> float:
@@ -174,6 +177,7 @@ def _nice(v: float) -> float:
     return next(m * mag for m in (1, 2, 2.5, 5, 10) if m * mag >= v * (1 - 1e-9))
 
 
-def _tick(v: float, top: float) -> str:
-    decimals = max(0, -floor(log10(top / 5) + 1e-9))
+def _tick(v: float, span: float) -> str:
+    step = span / 5  # the fewest decimals that show every tick exactly
+    decimals = next((d for d in range(7) if abs(round(step, d) - step) < 1e-9 * step), 6)
     return f"{v:.{decimals}f}"

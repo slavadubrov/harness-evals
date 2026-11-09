@@ -149,6 +149,10 @@ bootstrap interval. It resamples whole tasks with all their runs, 2,000 times, a
 recomputes the metric on each resample: success and pass^k average over the drawn tasks,
 the other metrics are computed on their pooled runs. Repeated runs of one task are not
 independent evidence about other tasks, so the intervals never resample runs alone.
+Define custom metrics per run, as a share or a mean over runs: a metric that groups runs
+by task would see a task drawn twice as one. A metric that cannot be computed on a
+resample is undefined there, and if more than 2.5% of resamples are undefined, its
+interval is unknown (None).
 
 Add the metrics that matter for your use case through `UseCase.metrics`, for example
 tool calls per task, how often a reply names an id, or a judge's score. Custom metrics
@@ -191,11 +195,13 @@ harnesses task by task and gives every compared metric a paired 95% interval of 
 minus base: success, cost per task, both latency percentiles, calls, tokens, the use
 case's metrics and its guardrails. Each resample draws the same tasks for both harnesses.
 
-Success and cost per task can earn a candidate its place. A guardrail is a limit on how
-much another metric may get worse, whatever the candidate gains, written like a gate but
-on the difference: `guardrails={"latency_p95": ("<=", 2.0)}` lets p95 latency rise by at
-most 2 seconds, and `{"names id": (">=", -0.1)}` lets a higher-is-better metric drop by
-at most 0.1. The rule decides:
+The gates come first: a base that misses one is replaced by any candidate that clears
+them all. Between two harnesses that clear the gates, success and cost per task decide
+whether the candidate is better, and guardrails limit how much other metrics may get
+worse. A guardrail is written like a gate but on the difference, candidate minus base:
+`guardrails={"latency_p95": ("<=", 2.0)}` lets p95 latency rise by at most 2 seconds, and
+`{"names id": (">=", -0.1)}` lets a higher-is-better metric drop by at most 0.1. Put an
+absolute limit, such as a latency ceiling, in the gates. The rule decides:
 
 1. **reject** if the candidate misses a gate or has more critical violations;
 2. **adopt** if the base misses a gate the candidate clears;
@@ -212,7 +218,9 @@ A cost gate fails while any run's cost is unknown, and a gate on a metric that c
 be computed fails too. A cheaper-candidate decision requires complete costs for both
 harnesses, and a guardrail on a metric that could not be compared keeps the base.
 `margin` must be finite and nonnegative; zero allows an equally successful, cheaper
-candidate. `Comparison.deltas` holds every compared metric's difference and interval.
+candidate. `Comparison.deltas` holds every compared metric's difference and interval, and
+`decide(usecase, base_summary, candidate_summary, deltas)` applies the rule to them; in
+v0.2.0 its last argument was the success interval alone.
 
 Pass `out=Path("runs/evaluation")` to `run` to save `episodes.jsonl` and `manifest.json`.
 The `harness-evals compare` CLI requires the manifest beside each episodes file. It
