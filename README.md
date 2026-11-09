@@ -18,9 +18,9 @@ no agent.
 ## Install
 
 ```bash
-uv add "harness-evals @ git+https://github.com/slavadubrov/harness-evals@v0.1.0"
+uv add "harness-evals @ git+https://github.com/slavadubrov/harness-evals@v0.2.0"
 # or
-pip install "git+https://github.com/slavadubrov/harness-evals@v0.1.0"
+pip install "git+https://github.com/slavadubrov/harness-evals@v0.2.0"
 ```
 
 ## The idea
