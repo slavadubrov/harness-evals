@@ -962,3 +962,19 @@ def test_the_command_refuses_one_harness_name_in_two_files(tmp_path):
             main(["summarize", str(tmp_path / "missing.jsonl"), "--usecase", "two_files_usecase"])
     finally:
         del sys.modules["two_files_usecase"]
+
+
+def test_a_comparison_names_the_models_when_they_differ_even_after_a_rename():
+    from harness_evals import comparison
+
+    uc, base = grades_for({f"t{i}": [True, True] for i in range(6)}, "base")
+    _, cand = grades_for({f"t{i}": [True, True] for i in range(6)}, "cand")
+    for g in base:
+        g.episode.models = ["small-0613"]
+    for g in cand:
+        g.episode.models = ["large-1106"]
+    c = compare(uc, base, cand)
+    c.base, c.candidate = "the current design", "the candidate"
+    text = comparison(c)
+    assert "Models differ: small-0613 against large-1106." in text
+    assert "**the candidate** against **the current design**" in text

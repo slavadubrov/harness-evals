@@ -85,7 +85,8 @@ def comparison(c: Comparison) -> str:
         others.append(f"{name} {v:+.{digits}f} ({dlo:+.{digits}f} to {dhi:+.{digits}f})")
     if others:
         lines.append("Candidate minus base: " + "; ".join(others) + ".")
-    models = [c.summaries[n].get("models") for n in (c.base, c.candidate)]
+    # By position, base then candidate: a caller may have renamed c.base and c.candidate.
+    models = [s.get("models") for s in c.summaries.values()]
     if all(models) and models[0] != models[1]:  # the model was meant to stay fixed
         lines.append(f"Models differ: {', '.join(models[0])} against {', '.join(models[1])}.")
     lines.append(f"Decision: **{c.decision}**. " + "; ".join(c.reasons))
