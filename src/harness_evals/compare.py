@@ -26,6 +26,9 @@ OPS = {">=": operator.ge, "<=": operator.le}
 Delta = tuple[float, tuple[float, float]]  # candidate minus base, and its 95% interval
 # Compared in every comparison, beside success and the use case's metrics and guardrails.
 COMPARED = ("cost_per_task", "latency_p50", "latency_p95", "calls_per_task", "tokens_per_task")
+# With fewer tasks, differences that all point the same way still cannot reach 95%
+# (a sign test on 5 tasks gives p = 0.0625), so an interval over them decides nothing.
+MIN_TASKS = 6
 
 
 def gate_failures(summary: dict[str, Any], gates: dict[str, tuple[str, float]]) -> list[str]:
@@ -141,6 +144,11 @@ def decide(
         return "reject", [f"more critical violations: {sc['violations']} vs {sb['violations']}"]
     if base_missed := gate_failures(sb, usecase.gates):
         return "adopt", ["the base misses the bar: " + "; ".join(base_missed)]
+    if sb.get("tasks", MIN_TASKS) < MIN_TASKS:
+        return "inconclusive", [
+            f"{sb['tasks']} tasks are too few for an interval to decide; keep the base and"
+            f" add tasks (at least {MIN_TASKS})"
+        ]
     _, (lo, hi) = deltas["success"]
     m = usecase.margin
     worse = [f"success is lower: {lo:+.3f} to {hi:+.3f}"] if hi < -m else []

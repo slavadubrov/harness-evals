@@ -1,6 +1,6 @@
 """Evaluate an agent harness or workflow with the model held fixed."""
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 from harness_evals.calibrate import agreement  # noqa: E402
 from harness_evals.compare import Comparison, compare, decide, gate_failures  # noqa: E402
@@ -22,11 +22,18 @@ from harness_evals.core import (  # noqa: E402
     state,
 )
 from harness_evals.metrics import (  # noqa: E402
+    by_harness,
     failures,
     pareto,
     pass_at_k,
     pass_hat_k,
     summarize,
+)
+from harness_evals.report import (  # noqa: E402
+    comparison,
+    failure_map_svg,
+    frontier_svg,
+    table,
 )
 from harness_evals.runner import comparable, fingerprint, load, run, save  # noqa: E402
 from harness_evals.usecase import UseCase  # noqa: E402
@@ -41,13 +48,17 @@ __all__ = [
     "UseCase",
     "agreement",
     "at_most",
+    "by_harness",
     "comparable",
     "compare",
+    "comparison",
     "decide",
     "did",
     "ended",
+    "failure_map_svg",
     "failures",
     "fingerprint",
+    "frontier_svg",
     "gate_failures",
     "grade",
     "judge",
@@ -63,4 +74,5 @@ __all__ = [
     "says",
     "state",
     "summarize",
+    "table",
 ]

@@ -14,6 +14,7 @@ from harness_evals import (
     UseCase,
     agreement,
     at_most,
+    by_harness,
     comparable,
     compare,
     did,
@@ -208,8 +209,19 @@ def test_missing_cost_cannot_establish_that_a_candidate_is_cheaper():
 
 
 def test_equal_success_and_known_lower_cost_need_no_loss_margin():
-    uc, base = grades_for({"a": [True, True]}, "base", cost=0.01)
-    _, cand = grades_for({"a": [True, True]}, "cand", cost=0.001)
+    uc, base = grades_for({f"t{i}": [True, True] for i in range(6)}, "base", cost=0.01)
+    _, cand = grades_for({f"t{i}": [True, True] for i in range(6)}, "cand", cost=0.001)
+    assert compare(uc, base, cand).decision == "adopt"
+
+
+def test_fewer_than_six_tasks_cannot_decide_on_an_interval():
+    # One task, 5 of 10 against 6 of 10: the bootstrap interval is a point above zero.
+    uc, base = grades_for({"a": [True] * 5 + [False] * 5}, "base")
+    _, cand = grades_for({"a": [True] * 6 + [False] * 4}, "cand")
+    c = compare(uc, base, cand)
+    assert c.decision == "inconclusive" and "too few" in c.reasons[0]
+    # The gates still decide: a base with a violation is replaced whatever the task count.
+    uc.gates = {"success": (">=", 0.6)}
     assert compare(uc, base, cand).decision == "adopt"
 
 
@@ -360,11 +372,41 @@ def test_adapter_outages_are_recorded_without_losing_other_trials(tmp_path):
             raise TimeoutError("request failed")
         return [Episode("t", state_ok=True)]
 
-    eps = run(uc, {"h": adapter}, trials=3, frozen={"model": "m"}, out=tmp_path)
+    with pytest.warns(UserWarning, match="TimeoutError"):
+        eps = run(uc, {"h": adapter}, trials=3, frozen={"model": "m"}, out=tmp_path)
     assert len(load(tmp_path / "episodes.jsonl")) == 3
     assert [g.passed for g in uc.grade(eps)] == [True, False, True]
     assert eps[1].infra_error and eps[1].status == "error"
-    assert eps[1].error == "adapter raised TimeoutError"
+    assert eps[1].error == "adapter raised TimeoutError('request failed')"
+
+
+def test_an_adapter_bug_is_warned_about_once_and_keeps_its_message():
+    uc = UseCase("u", [task(state())])
+
+    def adapter(tasks, trial):
+        return undefined_name  # noqa: F821 - the bug under test
+
+    with pytest.warns(UserWarning, match="NameError") as caught:
+        eps = run(uc, {"h": adapter}, trials=3, frozen={"model": "m"})
+    assert len(caught) == 1
+    assert "undefined_name" in eps[0].error
+
+
+def test_run_accepts_a_string_path_and_rejects_unsaveable_episodes_early(tmp_path):
+    uc = UseCase("u", [task(state())])
+    calls = []
+
+    def adapter(tasks, trial):
+        calls.append(trial)
+        return [Episode("t", state_ok=True, extra={"at": object()})]
+
+    with pytest.raises(TypeError):
+        run(uc, {"h": adapter}, trials=5, frozen={"model": "m"}, out=str(tmp_path / "x"))
+    assert calls == [0]  # stopped at the first batch, not after the last
+
+    ok = {"h": lambda tasks, trial: [Episode("t", state_ok=True)]}
+    run(uc, ok, trials=1, frozen={"model": "m"}, out=str(tmp_path / "y"))
+    assert len(load(tmp_path / "y" / "episodes.jsonl")) == 1
 
 
 @pytest.mark.parametrize("estimate", [pass_hat_k, pass_at_k])
@@ -616,8 +658,8 @@ def test_a_guardrail_that_the_interval_may_cross_keeps_the_base():
 
 
 def test_a_guardrail_on_a_metric_that_could_not_be_compared_keeps_the_base():
-    uc, base = grades_for({"a": [True, True]}, "base", cost=0.01)
-    _, cand = grades_for({"a": [True, True]}, "cand", cost=0.001)
+    uc, base = grades_for({f"t{i}": [True, True] for i in range(6)}, "base", cost=0.01)
+    _, cand = grades_for({f"t{i}": [True, True] for i in range(6)}, "cand", cost=0.001)
     cand[0].episode.latency_s = None
     uc.guardrails = {"latency_p95": ("<=", 2.0)}
     c = compare(uc, base, cand)
@@ -647,9 +689,34 @@ def test_the_frontier_plot_draws_every_harness_its_intervals_and_the_frontier():
     assert len(svg.findall("s:circle", ns)) == 2
     assert len(svg.find("s:polyline", ns).get("points").split()) == 2  # both on the frontier
     labels = [t.text for t in svg.findall("s:text", ns)]
-    assert {"agent", "workflow", "cost_per_task", "success"} <= set(labels)
+    assert {"agent", "workflow", "$ per task", "Success"} <= set(labels)  # axes carry units
     with pytest.raises(ValueError, match="no harness"):
         frontier_svg(sums, "cost_per_task", "unmeasured")
+
+
+def test_the_frontier_plot_keeps_labels_inside_names_what_it_left_out_and_can_zoom():
+    import re
+    import xml.etree.ElementTree as ET
+
+    from harness_evals.report import frontier_svg
+
+    sums = {
+        "a-harness-with-a-long-name": {"cost_per_task": 0.0052, "success": 1.0},
+        "close": {"cost_per_task": 0.0050, "success": 0.96},
+        "no-cost": {"cost_per_task": None, "success": 0.9},
+        "not-a-number": {"cost_per_task": float("nan"), "success": 0.9},
+    }
+    text = frontier_svg(sums, "cost_per_task", "success")
+    ET.fromstring(text)  # well-formed, with no nan coordinates
+    assert "nan" not in text.replace("not-a-number", "")
+    assert "Left out, a metric is missing: no-cost, not-a-number" in text
+    x = float(re.search(r'x="([\d.]+)" y="[\d.]+" fill="#\w+" [^>]*>a-harness', text).group(1))
+    assert x + 7.2 * len("a-harness-with-a-long-name") <= 640  # flipped to the left side
+    ticks = re.findall(r'text-anchor="middle" class="mut" fill="#666">([\d.]+)<', text)
+    assert ticks[0] == "0.000" and float(ticks[-1]) == 0.006  # no half-empty axis
+    zoomed = frontier_svg(sums, "cost_per_task", "success", zero=False)
+    ticks = re.findall(r'text-anchor="middle" class="mut" fill="#666">([\d.]+)<', zoomed)
+    assert float(ticks[0]) > 0.004  # the axis starts just below the data
 
 
 def test_the_table_shows_each_interval_beside_its_value():
@@ -747,7 +814,8 @@ def test_the_frontier_command_takes_lower_is_better_metrics_and_reports_unknown_
     args = ["frontier", str(path), "--usecase", "frontier_usecase", "--x", "tool calls"]
     main([*args, "--lower", "tool calls"])
     svg = capsys.readouterr().out
-    assert svg.count('fill="#c2185b">lean</text>') == 1 and 'fill="#444">busy</text>' in svg
+    assert svg.count(">lean</text>") == 1 and 'class="halo hot"' in svg  # lean is on the frontier
+    assert 'class="halo off"' in svg and ">busy</text>" in svg
     with pytest.raises(SystemExit, match="frontier"):
         main([*args[:-1], "unmeasured"])
 
@@ -825,3 +893,72 @@ def test_the_failures_command_draws_the_map_from_saved_runs(tmp_path, capsys, mo
     save([g.episode for g in grades["agent"]], path)
     main(["failures", str(path), "--usecase", "map_usecase", "--by", "runs"])
     assert capsys.readouterr().out.startswith("<svg")
+
+
+def test_critical_is_a_flag_on_action_checks_not_an_argument_filter():
+    refunded = Episode("t", actions=[Action("refund", {"order": "A1"})])
+    c = never("refund", critical=True)
+    assert c.name == "never refund()" and c.critical and c(refunded) is False
+    assert never("refund", critical=False).critical is False
+    d = did("refund", critical=True)
+    assert d.critical and d(refunded) is True
+    assert at_most(0, "refund", critical=False).critical is False
+
+
+def test_a_check_that_raises_is_undecided_not_a_crash():
+    uc = UseCase("u", [task(Check("short reply", lambda e: len(e.reply) < 80))])
+    (g,) = uc.grade([Episode("t", reply=None)])  # as after an adapter error
+    assert not g.passed and g.unknown == ["short reply"]
+
+
+def test_a_use_case_rejects_bad_gates_margins_and_bare_functions():
+    with pytest.raises(ValueError, match="gate on 'sucess'"):
+        UseCase("u", [task(state())], gates={"sucess": (">=", 0.8)})
+    with pytest.raises(ValueError, match="gate on 'violations' needs"):
+        UseCase("u", [task(state())], gates={"violations": ("==", 0)})
+    with pytest.raises(ValueError, match="margin"):
+        UseCase("u", [task(state())], margin=-1)
+    with pytest.raises(ValueError, match="wrap"):
+        UseCase("u", [task(lambda e: True)])
+
+
+def test_summarize_refuses_grades_of_several_harnesses():
+    _, a = grades_for({"t": [True, False]}, "a")
+    _, b = grades_for({"t": [True, True]}, "b")
+    with pytest.raises(ValueError, match="one harness"):
+        summarize(a + b)
+    assert {h: summarize(gs)["success"] for h, gs in by_harness(a + b).items()} == {
+        "a": 0.5,
+        "b": 1.0,
+    }
+
+
+def test_pareto_rejects_a_misspelt_metric_and_accepts_one_lower_name():
+    sums = {"a": {"steps": 3, "success": 0.9}, "b": {"steps": 1, "success": 0.8}}
+    with pytest.raises(ValueError, match="no harness has both"):
+        pareto(sums, "cost", "success")
+    assert pareto(sums, "steps", "success", lower="steps") == ["a", "b"]
+    sums["c"] = {"steps": float("nan"), "success": 1.0}
+    assert "c" not in pareto(sums, "steps", "success", lower=["steps"])
+
+
+def test_the_command_refuses_one_harness_name_in_two_files(tmp_path):
+    from types import SimpleNamespace
+
+    from harness_evals.cli import main
+
+    uc = UseCase("u", [task(state())])
+    sys.modules["two_files_usecase"] = SimpleNamespace(USECASE=uc)
+    try:
+        for folder in ("main", "pr"):
+            (tmp_path / folder).mkdir()
+            save([Episode("t", "agent", 0, state_ok=True)], tmp_path / folder / "episodes.jsonl")
+        files = [str(tmp_path / f / "episodes.jsonl") for f in ("main", "pr")]
+        with pytest.raises(SystemExit, match="more than one file"):
+            main(["summarize", *files, "--usecase", "two_files_usecase"])
+        with pytest.raises(SystemExit, match="--usecase no_such_module"):
+            main(["summarize", files[0], "--usecase", "no_such_module"])
+        with pytest.raises(SystemExit, match="harness-evals:"):
+            main(["summarize", str(tmp_path / "missing.jsonl"), "--usecase", "two_files_usecase"])
+    finally:
+        del sys.modules["two_files_usecase"]

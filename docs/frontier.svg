@@ -1,35 +1,42 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 440" role="img" font-family="system-ui, sans-serif" font-size="13" fill="#222">
-<title>success against cost_per_task</title>
-<rect width="640" height="440" fill="#fff"/>
-<text x="76" y="24" font-size="15" font-weight="600">success against cost_per_task</text>
-<text x="76" y="44" fill="#666">Bars: 95% intervals over tasks. <tspan fill="#c2185b">Line: no other harness beats these on both.</tspan></text>
-<path d="M76.0 64V384M76 384.0H612" stroke="#e6e6e6"/>
-<text x="76.0" y="402" text-anchor="middle" fill="#666">0.00000</text>
-<text x="68" y="388.0" text-anchor="end" fill="#666">0.0</text>
-<path d="M183.2 64V384M76 320.0H612" stroke="#e6e6e6"/>
-<text x="183.2" y="402" text-anchor="middle" fill="#666">0.00005</text>
-<text x="68" y="324.0" text-anchor="end" fill="#666">0.2</text>
-<path d="M290.4 64V384M76 256.0H612" stroke="#e6e6e6"/>
-<text x="290.4" y="402" text-anchor="middle" fill="#666">0.00010</text>
-<text x="68" y="260.0" text-anchor="end" fill="#666">0.4</text>
-<path d="M397.6 64V384M76 192.0H612" stroke="#e6e6e6"/>
-<text x="397.6" y="402" text-anchor="middle" fill="#666">0.00015</text>
-<text x="68" y="196.0" text-anchor="end" fill="#666">0.6</text>
-<path d="M504.8 64V384M76 128.0H612" stroke="#e6e6e6"/>
-<text x="504.8" y="402" text-anchor="middle" fill="#666">0.00020</text>
-<text x="68" y="132.0" text-anchor="end" fill="#666">0.8</text>
-<path d="M612.0 64V384M76 64.0H612" stroke="#e6e6e6"/>
-<text x="612.0" y="402" text-anchor="middle" fill="#666">0.00025</text>
-<text x="68" y="68.0" text-anchor="end" fill="#666">1.0</text>
-<text x="344.0" y="426" text-anchor="middle">cost_per_task</text>
-<text transform="translate(20 224.0) rotate(-90)" text-anchor="middle">success</text>
-<polyline fill="none" stroke="#c2185b" stroke-width="2" points="204.6,128.0 541.7,96.0"/>
-<path d="M510.8 96.0H570.0" stroke="#c2185b"/>
-<path d="M541.7 134.4V64.0" stroke="#c2185b"/>
-<circle cx="541.7" cy="96.0" r="4.5" fill="#c2185b"/>
-<text x="549.7" y="88.0" fill="#c2185b">agent</text>
-<path d="M204.6 128.0H204.6" stroke="#c2185b"/>
-<path d="M204.6 256.0V64.0" stroke="#c2185b"/>
-<circle cx="204.6" cy="128.0" r="4.5" fill="#c2185b"/>
-<text x="212.6" y="120.0" fill="#c2185b">workflow</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 452" role="img" font-family="system-ui, sans-serif" font-size="13" fill="#222">
+<title>Success against $ per task</title>
+<style>@media (prefers-color-scheme:dark){svg{fill:#e6edf3}.bg{fill:#0d1117}.mut{fill:#9da7b3}.grid{stroke:#30363d}.off{fill:#c9d1d9}.offl{stroke:#c9d1d9}.hot{fill:#ff6fb6}.hotl{stroke:#ff6fb6}.halo{stroke:#0d1117}}</style>
+<rect class="bg" width="640" height="452" fill="#fff"/>
+<text x="76" y="24" font-size="15" font-weight="600">Success against $ per task</text>
+<text x="76" y="44" class="mut" fill="#666">Bars: 95% intervals over tasks. <tspan class="hot" fill="#c2185b">Pink: no other harness beats it on both.</tspan></text>
+<path class="grid" d="M76.0 76V396" stroke="#e6e6e6"/>
+<text x="76.0" y="414" text-anchor="middle" class="mut" fill="#666">0.00000</text>
+<path class="grid" d="M180.8 76V396" stroke="#e6e6e6"/>
+<text x="180.8" y="414" text-anchor="middle" class="mut" fill="#666">0.00005</text>
+<path class="grid" d="M285.6 76V396" stroke="#e6e6e6"/>
+<text x="285.6" y="414" text-anchor="middle" class="mut" fill="#666">0.00010</text>
+<path class="grid" d="M390.4 76V396" stroke="#e6e6e6"/>
+<text x="390.4" y="414" text-anchor="middle" class="mut" fill="#666">0.00015</text>
+<path class="grid" d="M495.2 76V396" stroke="#e6e6e6"/>
+<text x="495.2" y="414" text-anchor="middle" class="mut" fill="#666">0.00020</text>
+<path class="grid" d="M600.0 76V396" stroke="#e6e6e6"/>
+<text x="600.0" y="414" text-anchor="middle" class="mut" fill="#666">0.00025</text>
+<path class="grid" d="M76 396.0H600" stroke="#e6e6e6"/>
+<text x="68" y="400.0" text-anchor="end" class="mut" fill="#666">0.0</text>
+<path class="grid" d="M76 332.0H600" stroke="#e6e6e6"/>
+<text x="68" y="336.0" text-anchor="end" class="mut" fill="#666">0.2</text>
+<path class="grid" d="M76 268.0H600" stroke="#e6e6e6"/>
+<text x="68" y="272.0" text-anchor="end" class="mut" fill="#666">0.4</text>
+<path class="grid" d="M76 204.0H600" stroke="#e6e6e6"/>
+<text x="68" y="208.0" text-anchor="end" class="mut" fill="#666">0.6</text>
+<path class="grid" d="M76 140.0H600" stroke="#e6e6e6"/>
+<text x="68" y="144.0" text-anchor="end" class="mut" fill="#666">0.8</text>
+<path class="grid" d="M76 76.0H600" stroke="#e6e6e6"/>
+<text x="68" y="80.0" text-anchor="end" class="mut" fill="#666">1.0</text>
+<text x="338.0" y="438" text-anchor="middle">$ per task</text>
+<text transform="translate(20 236.0) rotate(-90)" text-anchor="middle">Success</text>
+<polyline class="hotl" fill="none" stroke="#c2185b" stroke-width="2" points="201.8,140.0 531.3,108.0"/>
+<path class="hotl" d="M501.1 108.0H558.9M501.1 105.0v6M558.9 105.0v6" stroke="#c2185b"/>
+<path class="hotl" d="M531.3 146.4V76.0M528.3 146.4h6M528.3 76.0h6" stroke="#c2185b"/>
+<circle class="hot" cx="531.3" cy="108.0" r="4.5" fill="#c2185b"/>
+<path class="hotl" d="M201.8 140.0H201.8M201.8 137.0v6M201.8 137.0v6" stroke="#c2185b"/>
+<path class="hotl" d="M201.8 268.0V76.0M198.8 268.0h6M198.8 76.0h6" stroke="#c2185b"/>
+<circle class="hot" cx="201.8" cy="140.0" r="4.5" fill="#c2185b"/>
+<text class="halo hot" x="539.3" y="100.0" fill="#c2185b" stroke="#fff" stroke-width="3" stroke-linejoin="round" paint-order="stroke">agent</text>
+<text class="halo hot" x="209.8" y="132.0" fill="#c2185b" stroke="#fff" stroke-width="3" stroke-linejoin="round" paint-order="stroke">workflow</text>
 </svg>

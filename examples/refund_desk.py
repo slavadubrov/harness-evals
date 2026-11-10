@@ -1,4 +1,7 @@
-"""A self-contained example that runs offline in a second: python examples/refund_desk.py
+"""A self-contained example that runs offline in a second:
+
+    python examples/refund_desk.py        # print the table and the decision
+    python examples/refund_desk.py out    # also save the runs and both figures to out/
 
 Two harnesses for one small refund desk, evaluated on the same five tasks:
 
@@ -24,16 +27,20 @@ from harness_evals import (
     Task,
     UseCase,
     at_most,
+    by_harness,
     compare,
+    comparison,
     did,
+    failure_map_svg,
+    frontier_svg,
     gate_failures,
     never,
     pareto,
     run,
     says,
     summarize,
+    table,
 )
-from harness_evals.report import comparison, failure_map_svg, frontier_svg, table
 
 ORDERS = {  # order id -> (owner, days since delivery, amount in cents)
     "A1": ("ana", 3, 4800),
@@ -124,22 +131,23 @@ def adapter(harness):
 
 
 if __name__ == "__main__":
+    out = Path(sys.argv[1]) if len(sys.argv) > 1 else None
     episodes = run(
         USECASE,
         {"agent": adapter(agent), "workflow": adapter(workflow)},
         trials=10,
         frozen={"model": "simulated"},
+        out=out,  # episodes.jsonl and manifest.json, for the harness-evals command
     )
-    grades = USECASE.grade(episodes)
-    by = {h: [g for g in grades if g.episode.harness == h] for h in ("agent", "workflow")}
-    summaries = {h: summarize(gs) for h, gs in by.items()}
+    by = by_harness(USECASE.grade(episodes))
+    summaries = {h: summarize(gs, USECASE.metrics) for h, gs in by.items()}
     print(table(summaries))
     for h, s in summaries.items():
         print(f"{h} misses the bar: {gate_failures(s, USECASE.gates) or 'nothing'}")
     print("Frontier, success against cost:", pareto(summaries, "cost_per_task", "success"))
     print()
     print(comparison(compare(USECASE, by["agent"], by["workflow"])))
-    if len(sys.argv) > 1:  # python examples/refund_desk.py frontier.svg failures.svg
-        Path(sys.argv[1]).write_text(frontier_svg(summaries, "cost_per_task", "success"))
-    if len(sys.argv) > 2:
-        Path(sys.argv[2]).write_text(failure_map_svg(USECASE, by))
+    if out:
+        (out / "frontier.svg").write_text(frontier_svg(summaries, "cost_per_task", "success"))
+        (out / "failures.svg").write_text(failure_map_svg(USECASE, by))
+        print(f"\nSaved the runs, frontier.svg and failures.svg to {out}/")

@@ -17,15 +17,42 @@ no agent.
 - It does not call models or run your harness. Your adapter does that; the library
   grades what the adapter observed.
 
-![harness-evals at a glance: you bring a use case, harnesses behind adapters and a frozen setup; harness-evals runs, grades, summarizes and compares them; you get saved runs, metrics with intervals and a decision](docs/overview.svg)
+Two figures answer the questions a table cannot: which harness gives the best trade-off,
+and where each one fails.
+
+| Which harness to pick | Where each harness fails |
+| --- | --- |
+| ![Success against cost per task for the example's two harnesses, each with a 95% interval on both axes; both are on the frontier: the workflow is cheaper, the agent more successful](docs/frontier.svg) | ![A grid with the example's five tasks in rows and the kinds of check in columns, one panel per harness: the agent refunds the late order and misses its reply check in 2 of 10 runs and misses the policy question's reply check in 3; the workflow misses that reply check in all 10](docs/failure-map.svg) |
 
 ## Install
 
 ```bash
-uv add "harness-evals @ git+https://github.com/slavadubrov/harness-evals@v0.4.0"
+uv add "harness-evals @ git+https://github.com/slavadubrov/harness-evals@v0.5.0"
 # or
-pip install "git+https://github.com/slavadubrov/harness-evals@v0.4.0"
+pip install "git+https://github.com/slavadubrov/harness-evals@v0.5.0"
 ```
+
+## Quickstart
+
+The example runs offline in a second. It is in the repository, not in the installed
+package:
+
+```bash
+git clone --depth 1 --branch v0.5.0 https://github.com/slavadubrov/harness-evals
+cd harness-evals
+uv run python examples/refund_desk.py out
+```
+
+It prints the table and the decision shown [below](#a-task-and-an-adapter), and saves the
+runs and both figures to `out/`. Its "agent" is a simulated model with seeded mistakes, so
+the numbers describe the simulation only. The same results from the saved runs:
+
+```bash
+uv run harness-evals summarize out/episodes.jsonl --usecase examples.refund_desk:USECASE
+uv run harness-evals compare out/episodes.jsonl --usecase examples.refund_desk:USECASE --base agent --candidate workflow
+```
+
+![harness-evals at a glance: you bring a use case, harnesses behind adapters and a frozen setup; harness-evals runs, grades, summarizes and compares them; you get saved runs, metrics with intervals and a decision](docs/overview.svg)
 
 ## The idea
 
@@ -42,9 +69,11 @@ harness.
 | `Task` | One case: its input and the checks a correct run must pass | `core.py` |
 | `Check` | One obligation. Returns True, False, or None when evidence is missing; `critical` marks a rule that must never break | `core.py` |
 | `Episode` | What the evaluator observed in one run: status, reply, actions the environment recorded, cost, latency, models | `core.py` |
+| `Action` | One effect the environment recorded: `Action("refund", {"order": "A1"})` | `core.py` |
 | adapter | Your function `(tasks, trial) -> list[Episode]` that runs one harness | your code |
 | `run` | Runs every harness `trials` times, rotates their execution order and writes a manifest of what was held fixed | `runner.py` |
-| `summarize`, `compare` | The metrics below, and a paired comparison with an adoption decision | `metrics.py`, `compare.py` |
+| `summarize`, `compare` | The metrics below for one harness, and a paired comparison with an adoption decision | `metrics.py`, `compare.py` |
+| `by_harness`, `table`, `comparison` | The grades of each harness, and Markdown for summaries and for a comparison | `metrics.py`, `report.py` |
 | `pareto`, `frontier_svg` | The harnesses no other beats on two metrics, and a plot of all of them with intervals on both axes | `metrics.py`, `report.py` |
 | `failure_map_svg` | Where each harness fails: tasks in rows, kinds of check or runs in columns | `report.py` |
 | `agreement` | How often a grader agrees with labels a person wrote | `calibrate.py` |
@@ -52,6 +81,9 @@ harness.
 ![C4 component view of the harness_evals package: the public API and CLI on top, runner, compare, report and calibrate in the middle, usecase and metrics below, core at the base; your script, your adapters and the runs folder around it](docs/components.svg)
 
 ## A task and an adapter
+
+This is a template: `Environment`, `run_my_agent` and `my_workflow` stand for your code.
+[`examples/refund_desk.py`](examples/refund_desk.py) is the runnable version.
 
 ```python
 from harness_evals import Episode, Task, UseCase, at_most, did, never, run, says
@@ -66,8 +98,8 @@ USECASE = UseCase(
         ),
         Task("refund-late", "ana: refund order A2", (never("refund"), says(r"30 days"))),
     ],
-    gates={"violations": ("<=", 0), "pass^k": (">=", 0.9)},
-    guardrails={"latency_p95": ("<=", 2.0)},  # a candidate may be at most 2 s slower
+    gates={"violations": ("<=", 0), "success": (">=", 0.8)},  # the bar a harness must clear
+    guardrails={"latency_p95": ("<=", 1.0)},  # a candidate may be at most 1 s slower
 )
 
 
@@ -80,7 +112,7 @@ def my_agent(tasks, trial):
             Episode(
                 task.id,
                 reply=reply,
-                actions=env.log,  # what the environment recorded
+                actions=env.log,  # a list of Action(name, args) the environment recorded
                 cost_usd=env.cost,
                 latency_s=env.seconds,
                 model_calls=env.calls,
@@ -97,20 +129,43 @@ episodes = run(
 )
 ```
 
+Print the results, and compare the two harnesses:
+
+```python
+from harness_evals import by_harness, compare, comparison, summarize, table
+
+by = by_harness(USECASE.grade(episodes))  # {"agent": [...], "workflow": [...]}
+summaries = {h: summarize(gs, USECASE.metrics) for h, gs in by.items()}
+print(table(summaries, extra=list(USECASE.metrics)))
+print(comparison(compare(USECASE, by["agent"], by["workflow"])))
+```
+
+`summarize` takes the grades of one harness. Pass `USECASE.metrics`, or your own metrics
+are left out.
+
 `did`, `never`, `at_most`, `says`, `never_says`, `ended`, `state` and `judged` cover the
-common obligations. A check is any function from an `Episode` to `True`, `False` or
-`None`, so write your own for anything else.
+common obligations. For anything else, wrap your own function in a `Check`:
+
+```python
+Check("reply under 80 characters", lambda e: e.reply is not None and len(e.reply) < 80)
+```
+
+Return a real `True` or `False`: `None` means the evidence is missing and is reported as
+undecided, so write `bool(re.search(...))`, not `re.search(...)`. A check that raises is
+undecided too. `never` and `at_most` are critical by default and the others are not; pass
+`critical=True` or `critical=False` to change that.
 
 Adapters receive independent copies of the tasks, and the runner snapshots each returned
 episode. Duplicate or unrequested episodes raise an error. Missing episodes and adapter
 exceptions become infrastructure failures; an exception marks every task in that batch
-as failed with unknown cost. `trials` must be a positive integer.
+as failed with unknown cost, keeps the exception's message in `Episode.error` and warns
+once per harness, so a bug in an adapter does not pass as a low score. `trials` must be a
+positive integer.
 
 ![Sequence diagram of run(): it checks the frozen setup and builds a manifest, then for each trial calls every adapter in rotating order with a deep copy of the tasks; missing episodes and adapter exceptions become infra errors, and the runs are saved](docs/run-sequence.svg)
 
-[`examples/refund_desk.py`](examples/refund_desk.py) runs offline in a second. Its
-"agent" is a simulated model with seeded mistakes, and its cost, latency and usage are
-simulated too, so its numbers describe the simulation only:
+[`examples/refund_desk.py`](examples/refund_desk.py) prints this, among other lines. Its
+cost, latency and usage are simulated:
 
 ```text
 | Harness | Success | pass^k | Violations | $ per task | $ per success | p50 latency, s | p95 latency, s | Calls per task | Tokens per task | Infra errors | Undecided |
@@ -143,7 +198,7 @@ Decision: **adopt**. the base misses the bar: violations = 2, needs <= 0
 | `latency_p50`, `latency_p95` | Nearest-rank percentiles; unknown if any run's latency is missing |
 | `calls_per_task`, `tokens_per_task` | Mean model calls and tokens per run, the work behind the cost, apart from prices and cache discounts; unknown if any run does not report them |
 | `infra_errors`, `unknown_verdicts` | Runs the provider or runner broke, and runs a check could not decide. Both count as failures and are reported |
-| `models` | The model ids the provider reported, to catch a silent model change |
+| `models` | The model ids the provider reported. A comparison prints them when the two harnesses differ; check them against `frozen["model"]` |
 
 Every rate, cost, latency, usage and custom metric also comes with `<name>_ci`, a 95%
 bootstrap interval. It resamples whole tasks with all their runs, 2,000 times, and
@@ -170,23 +225,21 @@ worse on the other.
 ```python
 from pathlib import Path
 
-from harness_evals import pareto, summarize
-from harness_evals.report import frontier_svg
+from harness_evals import frontier_svg, pareto
 
-grades = USECASE.grade(episodes)
-by_harness = {h: [g for g in grades if g.episode.harness == h] for h in ("agent", "workflow")}
-summaries = {name: summarize(gs) for name, gs in by_harness.items()}
 pareto(summaries, "cost_per_task", "success")  # ['agent', 'workflow']
 Path("frontier.svg").write_text(frontier_svg(summaries, "cost_per_task", "success"))
 ```
 
-![Success against cost per task for the example's two harnesses, each with a 95% interval on both axes; both are on the frontier: the workflow is cheaper, the agent more successful](docs/frontier.svg)
+The first figure at the top of this page is that plot for the example.
 
 Directions are built in: higher is better for success, pass^k and custom metrics, lower for
 cost, latency, calls, tokens and error counts. Pass `lower=["my metric"]` for a custom
 metric where smaller is better. The frontier uses point estimates, so read the intervals
-before trusting the order of harnesses whose intervals overlap. From saved runs:
-`harness-evals frontier runs/episodes.jsonl --usecase my_usecase --x latency_p95 > plot.svg`.
+before trusting the order of harnesses whose intervals overlap. When the harnesses are
+close variants of one design, pass `zero=False`: each axis then starts just below the
+data instead of at zero. A harness that lacks one of the two metrics is left out and named
+under the title.
 
 ## Where each harness fails
 
@@ -196,20 +249,19 @@ and `did refund(order='B1')` share the column `did refund`; a cell shows the sha
 the task's runs that failed that check, and a dot marks a check the task does not have.
 With `by="runs"`, each run is a column. Every harness gets its own panel with the same
 rows, so you can see which harness fails which check on which task. Hovering over a cell
-gives the count.
+gives the count when the SVG is opened on its own; an image in a README shows no tooltips.
 
 ```python
-from harness_evals.report import failure_map_svg
+from harness_evals import failure_map_svg
 
-Path("failures.svg").write_text(failure_map_svg(USECASE, by_harness))  # by_harness as above
+Path("failures.svg").write_text(failure_map_svg(USECASE, by))  # by = by_harness(...) as above
 ```
 
-![A grid with the example's five tasks in rows and the kinds of check in columns, one panel per harness: the agent refunds the late order and misses its reply check in 2 of 10 runs and misses the policy question's reply check in 3; the workflow misses that reply check in all 10](docs/failure-map.svg)
+The second figure at the top of this page is that map for the example.
 
-Pass `group=` to name the columns another way; it receives a check's name. From saved
-runs: `harness-evals failures runs/episodes.jsonl --usecase my_usecase > failures.svg`, or
-`--by runs` for the run grid. `failures(grades)` returns the same counts per check name
-as a dictionary.
+Pass `group=` to name the columns another way; it receives a check's name. Use
+`by="runs"` for the run grid. `failures(grades)` returns the same counts per check name as
+a dictionary.
 
 ## The adoption rule
 
@@ -236,6 +288,10 @@ absolute limit, such as a latency ceiling, in the gates. The rule decides:
    within its limit;
 5. otherwise **inconclusive**: keep the base, and add tasks or runs.
 
+Steps 1 and 2 read point estimates: a gate ignores the interval. Steps 3 and 4 need at
+least six tasks. With fewer, differences that all point the same way still cannot reach
+95% (a sign test on five tasks gives p = 0.0625), so the result is inconclusive.
+
 ![The adoption rule as six questions asked in order, each with a reject or adopt exit and inconclusive at the end, beside a number line showing how the success interval is read](docs/adoption-rule.svg)
 
 A cost gate fails while any run's cost is unknown, and a gate on a metric that could not
@@ -243,13 +299,25 @@ be computed fails too. A cheaper-candidate decision requires complete costs for 
 harnesses, and a guardrail on a metric that could not be compared keeps the base.
 `margin` must be finite and nonnegative; zero allows an equally successful, cheaper
 candidate. `Comparison.deltas` holds every compared metric's difference and interval, and
-`decide(usecase, base_summary, candidate_summary, deltas)` applies the rule to them; in
-v0.2.0 its last argument was the success interval alone.
+`decide(usecase, base_summary, candidate_summary, deltas)` applies the rule to them.
 
-Pass `out=Path("runs/evaluation")` to `run` to save `episodes.jsonl` and `manifest.json`.
-The `harness-evals compare` CLI requires the manifest beside each episodes file. It
-checks the manifests against each other and against the current use case before
-grading. The `summarize` and `frontier` commands also check manifests when present.
+## From saved runs
+
+Pass `out="runs/evaluation"` to `run` to save `episodes.jsonl` and `manifest.json`. With
+the use case in `my_usecase.py` as `USECASE`, in the folder you run the command from:
+
+```bash
+harness-evals summarize runs/evaluation/episodes.jsonl --usecase my_usecase:USECASE
+harness-evals compare runs/evaluation/episodes.jsonl --usecase my_usecase:USECASE --base agent --candidate workflow
+harness-evals frontier runs/evaluation/episodes.jsonl --usecase my_usecase:USECASE --x latency_p95 > frontier.svg
+harness-evals failures runs/evaluation/episodes.jsonl --usecase my_usecase:USECASE > failures.svg
+```
+
+`compare` requires the manifest beside each episodes file. It checks the manifests
+against each other and against the current use case before grading; the other commands
+check manifests when present. Harness names must be unique across the files you pass: to
+compare two versions of one harness, run them under two names, such as `main` and
+`candidate`.
 
 ## What it guards against
 
@@ -258,7 +326,6 @@ grading. The `summarize` and `frontier` commands also check manifests when prese
   task fingerprint differ. Fingerprints include check names and critical flags, and
   built-in check names encode their arguments without ambiguous separators. For custom
   checks and judges, change the check name or `UseCase.version` when their logic changes.
-  The updated fingerprint format differs from v0.1.0; regenerate runs for CLI comparisons.
 - **Grading the final state only.** Tasks carry checks on actions and replies; a
   harness that does nothing should fail every task.
 - **Missing evidence.** A check that returns None fails the run, and a judge that raises
@@ -275,6 +342,11 @@ grading. The `summarize` and `frontier` commands also check manifests when prese
 
 - The intervals treat your tasks as a sample of the requests the harness will see. With
   a few dozen tasks they are wide; that is information, not a defect.
+- With very few tasks the intervals are too narrow as well. One task gives a point. In a
+  simulation of two identical harnesses on 5 tasks with 10 trials each, the interval of
+  their difference excluded zero in about one evaluation in six instead of one in twenty,
+  and came close to 5% only at about 40 tasks. The adoption rule therefore decides nothing
+  on an interval from fewer than six tasks; treat a decision on 10 to 20 tasks as weak.
 - When every run of every task passes, the interval collapses to a point. Zero failures
   in n runs still allows a failure rate up to about 3/n at 95% confidence.
 - The library trusts the episodes it is given. Build them from records the harness

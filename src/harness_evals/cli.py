@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
+import os
+import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -17,13 +19,25 @@ from harness_evals.usecase import UseCase
 
 def _usecase(ref: str) -> UseCase:
     module, _, attr = ref.partition(":")
-    uc = getattr(importlib.import_module(module), attr or "USECASE")
+    if os.getcwd() not in sys.path:  # a use case next to the runs, as a script would see it
+        sys.path.insert(0, os.getcwd())
+    try:
+        uc = getattr(importlib.import_module(module), attr or "USECASE")
+    except (ImportError, AttributeError) as exc:
+        raise SystemExit(f"--usecase {ref}: {exc}") from None
     if not isinstance(uc, UseCase):
         raise SystemExit(f"{ref} is not a UseCase")
     return uc
 
 
 def main(argv: list[str] | None = None) -> None:
+    try:
+        _main(argv)
+    except (OSError, ValueError) as exc:  # a bad file or mismatched runs: one line, no trace
+        raise SystemExit(f"harness-evals: {exc}") from None
+
+
+def _main(argv: list[str] | None) -> None:
     p = argparse.ArgumentParser(prog="harness-evals")
     p.add_argument("command", choices=["summarize", "compare", "frontier", "failures"])
     p.add_argument("episodes", nargs="+", type=Path, help="episodes.jsonl files")
@@ -68,8 +82,15 @@ def main(argv: list[str] | None = None) -> None:
             reference = manifest
         elif a.command == "compare":
             raise SystemExit("compare requires manifest.json next to each episodes file")
+        new: dict[str, list] = defaultdict(list)
         for g in uc.grade(load(path)):
-            grades[g.episode.harness].append(g)
+            new[g.episode.harness].append(g)
+        if again := sorted(set(new) & set(grades)):  # pooling two versions hides both
+            raise SystemExit(
+                f"harness {', '.join(again)} appears in more than one file; run each version"
+                " under its own name, such as main and candidate"
+            )
+        grades.update(new)
     if a.command == "compare":
         if not (a.base in grades and a.candidate in grades):
             raise SystemExit(f"--base and --candidate must be among: {', '.join(grades)}")

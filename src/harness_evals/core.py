@@ -106,7 +106,10 @@ def grade(task: Task, e: Episode) -> Grade:
     if e.error is not None or e.infra_error or e.status == "error":
         failed.append("no run error")
     for c in task.checks:
-        v = c(e)
+        try:
+            v = c(e)
+        except Exception:  # noqa: BLE001 - a check that cannot run is missing evidence
+            v = None
         if v is None:
             unknown.append(c.name)
         elif not v:
@@ -135,28 +138,35 @@ def state() -> Check:
     return Check("state", lambda e: e.state_ok)
 
 
-def did(name: str, **args: Any) -> Check:
+# ``critical`` is keyword-only in the action checks, so it is never read as an argument
+# the action must match. An action argument that is itself named "critical" needs a
+# Check of your own.
+
+
+def did(name: str, *, critical: bool = False, **args: Any) -> Check:
     """The environment recorded at least one matching action."""
     return Check(
-        f"did {_call(name, args)}", lambda e: any(a.matches(name, args) for a in e.actions)
+        f"did {_call(name, args)}",
+        lambda e: any(a.matches(name, args) for a in e.actions),
+        critical=critical,
     )
 
 
-def never(name: str, **args: Any) -> Check:
+def never(name: str, *, critical: bool = True, **args: Any) -> Check:
     """No matching action happened, including one that was later undone."""
     return Check(
         f"never {_call(name, args)}",
         lambda e: not any(a.matches(name, args) for a in e.actions),
-        critical=True,
+        critical=critical,
     )
 
 
-def at_most(n: int, name: str, **args: Any) -> Check:
+def at_most(n: int, name: str, *, critical: bool = True, **args: Any) -> Check:
     """At most ``n`` matching actions: a second refund for one request breaks it."""
     return Check(
         f"at most {n} {_call(name, args)}",
         lambda e: sum(a.matches(name, args) for a in e.actions) <= n,
-        critical=True,
+        critical=critical,
     )
 
 

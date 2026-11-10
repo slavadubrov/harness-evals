@@ -44,6 +44,14 @@ def by_task(grades: Sequence[Grade]) -> dict[str, list[Grade]]:
     return dict(out)
 
 
+def by_harness(grades: Sequence[Grade]) -> dict[str, list[Grade]]:
+    """The grades of each harness, in the order the harnesses first appear."""
+    out: dict[str, list[Grade]] = defaultdict(list)
+    for g in grades:
+        out[g.episode.harness].append(g)
+    return dict(out)
+
+
 def task_rates(grades: Sequence[Grade]) -> dict[str, float]:
     """The share of trials each task passed."""
     return {t: sum(g.passed for g in gs) / len(gs) for t, gs in by_task(grades).items()}
@@ -229,6 +237,10 @@ def summarize(
     latencies, usage and use-case metrics come with a 95% interval over tasks: ``<name>_ci``."""
     if not grades:
         raise ValueError("no graded episodes")
+    if len(names := {g.episode.harness for g in grades}) > 1:
+        raise ValueError(
+            f"summarize takes one harness, got {sorted(names)}; split them with by_harness()"
+        )
     tasks = list(by_task(grades).values())
     rates = task_rates(grades)
     k = min(len(gs) for gs in tasks)
@@ -267,14 +279,18 @@ def pareto(
     on ``x`` and on ``y`` and better on one of them. ``lower`` names custom metrics where
     smaller is better. The frontier uses point estimates; harnesses whose intervals overlap
     may swap places in another sample."""
-    low = LOWER_IS_BETTER | set(lower)
+    low = LOWER_IS_BETTER | ({lower} if isinstance(lower, str) else set(lower))
 
     def score(s: Mapping[str, Any], m: str) -> float | None:
         v = s.get(m)
-        return None if v is None else (-v if m in low else v)
+        if not isinstance(v, int | float) or v != v:  # missing, not a number, or NaN
+            return None
+        return -v if m in low else v
 
     pts = {h: (score(s, x), score(s, y)) for h, s in summaries.items()}
     known = {h: p for h, p in pts.items() if None not in p}
+    if summaries and not known:
+        raise ValueError(f"no harness has both {x} and {y}")
     return [
         h
         for h, (a, b) in known.items()

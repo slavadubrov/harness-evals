@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import warnings
 from collections.abc import Callable, Iterable, Mapping
 from copy import deepcopy
 from datetime import UTC, datetime
@@ -41,7 +42,7 @@ def run(
     trials: int,
     frozen: Mapping[str, Any],
     split: str = "dev",
-    out: Path | None = None,
+    out: Path | str | None = None,
 ) -> list[Episode]:
     """Run every harness ``trials`` times on the tasks of one split.
 
@@ -69,8 +70,13 @@ def run(
         "evaluator": f"harness-evals {__version__}",
         "started": _now(),
     }
+    json.dumps(manifest)  # fail before the first trial, not after the last
+    if out is not None:
+        out = Path(out)
+        out.mkdir(parents=True, exist_ok=True)
     episodes: list[Episode] = []
     adapters = list(harnesses.items())
+    warned: set[str] = set()
     for trial in range(trials):
         start = trial % len(adapters)
         for name, adapter in adapters[start:] + adapters[:start]:
@@ -78,14 +84,16 @@ def run(
                 batch = list(adapter(deepcopy(tasks), trial))
             except Exception as exc:
                 # A batch error loses partial evidence; catch per-task errors in adapters.
-                batch = [
-                    Episode(
-                        t.id,
-                        status="error",
-                        infra_error=True,
-                        error=f"adapter raised {type(exc).__name__}",
+                error = f"adapter raised {exc!r}"[:300]
+                if name not in warned:  # a bug in an adapter must not pass as a low score
+                    warned.add(name)
+                    warnings.warn(
+                        f"harness {name!r}: {error}; every task of the batch counts as an"
+                        " infrastructure error",
+                        stacklevel=2,
                     )
-                    for t in tasks
+                batch = [
+                    Episode(t.id, status="error", infra_error=True, error=error) for t in tasks
                 ]
             got = {e.task_id: e for e in batch}
             if len(got) != len(batch) or got.keys() - {t.id for t in tasks}:
@@ -99,11 +107,12 @@ def run(
                     )
                 )
                 e.harness, e.trial = name, trial
+                if out is not None:  # an unsaveable episode stops the run now, not at the end
+                    json.dumps(e.to_dict())
                 episodes.append(e)
     manifest["finished"] = _now()
     if out is not None:
         manifest_text = json.dumps(manifest, indent=2) + "\n"
-        out.mkdir(parents=True, exist_ok=True)
         save(episodes, out / "episodes.jsonl")
         (out / "manifest.json").write_text(manifest_text, encoding="utf-8")
     return episodes
@@ -134,6 +143,7 @@ def save(episodes: Iterable[Episode], path: Path) -> None:
 
 
 def load(path: Path) -> list[Episode]:
+    """The episodes that ``save`` or ``run(..., out=...)`` wrote."""
     with open(path, encoding="utf-8") as f:
         return [Episode.from_dict(json.loads(line)) for line in f if line.strip()]
 
