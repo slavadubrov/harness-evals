@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from html import escape
-from math import ceil, floor, isfinite, log10
+from math import ceil, floor, hypot, isfinite, log10
 from typing import Any
 
 from harness_evals.compare import Comparison
@@ -195,19 +195,41 @@ def frontier_svg(
             f'<circle class="{"hot" if hot else "off"}" cx="{cx:.1f}" cy="{cy:.1f}" r="4.5" '
             f'fill="{color}"/>'
         )
-    placed: list[tuple[float, float, float]] = []  # label boxes: left edge, baseline, width
+    # Labels go last, each at the first spot around its point, nearest first, that covers
+    # no mark, no part of the frontier line and no earlier label, and stays in the frame.
+    taken: list[Box] = []
+    for s in pts.values():
+        cx, cy = px(s[x]), py(s[y])
+        taken.append((cx - 6, cy - 6, cx + 6, cy + 6))
+        if ci := s.get(f"{x}_ci"):
+            taken.append((px(ci[0]), cy - 2, px(ci[1]), cy + 2))
+        if ci := s.get(f"{y}_ci"):
+            taken.append((cx - 2, py(ci[1]), cx + 2, py(ci[0])))
+    dots = [(px(a), py(b)) for a, b in line]
+    for (ax, ay), (bx, by) in zip(dots, dots[1:], strict=False):
+        n = max(1, int(hypot(bx - ax, by - ay) / 8))  # the line, as a chain of small boxes
+        for i in range(n + 1):
+            u, v = ax + (bx - ax) * i / n, ay + (by - ay) * i / n
+            taken.append((u - 2, v - 2, u + 2, v + 2))
+    frame = (left + 2, top - 10, w - 4, h - bottom - 2)
     for name, s in pts.items():
         cx, cy = px(s[x]), py(s[y])
         lw = 7.2 * len(name)
-        flip = cx + 8 + lw > w - 4  # no room on the right: put the label on the left
-        lx = cx - 8 - lw if flip else cx + 8
-        home = ly = cy + 18 if cy - 8 < top + 12 else cy - 8  # below, if the title is near
-        while any(abs(ly - b) < 15 and lx < a + c and a < lx + lw for a, b, c in placed):
-            ly += 15  # Greedy nudge downward: enough for a handful of harnesses.
-        placed.append((lx, ly, lw))
-        if ly != home:  # moved: a leader line keeps the label with its point
-            end = lx + lw + 2 if flip else lx - 2
-            o.append(f'<path d="M{cx:.1f} {cy:.1f}L{end:.1f} {ly - 4:.1f}" stroke="#bbb"/>')
+        lx, ly = next(
+            (
+                spot
+                for spot in _spots(cx, cy, lw)
+                if _inside(_box(*spot, lw), frame)
+                and not any(_overlap(_box(*spot, lw), t) for t in taken)
+            ),
+            (min(cx + 8, w - 4 - lw), cy - 8),  # nowhere is free: beside the point
+        )
+        box = _box(lx, ly, lw)
+        taken.append(box)
+        # The label's point nearest to its mark.
+        ex, ey = min(max(cx, box[0]), box[2]), min(max(cy, box[1]), box[3])
+        if hypot(ex - cx, ey - cy) > 14:  # far from its point: a leader line joins them
+            o.append(f'<path d="M{cx:.1f} {cy:.1f}L{ex:.1f} {ey:.1f}" stroke="#bbb"/>')
         hot = name in front
         o.append(
             f'<text class="halo {"hot" if hot else "off"}" x="{lx:.1f}" y="{ly:.1f}" '
@@ -216,6 +238,36 @@ def frontier_svg(
         )
     o.append("</svg>")
     return "\n".join(o) + "\n"
+
+
+Box = tuple[float, float, float, float]  # left, top, right, bottom
+
+
+def _spots(cx: float, cy: float, lw: float) -> Iterable[tuple[float, float]]:
+    """Places for a label of width ``lw`` around a point, as (left, baseline), nearest
+    first: the four diagonals, then beside, above and below, at growing distances."""
+    for r in (9, 22, 36, 52, 70, 90):
+        d = r * 0.7
+        yield cx + d, cy - d
+        yield cx + d, cy + d + 9
+        yield cx - d - lw, cy - d
+        yield cx - d - lw, cy + d + 9
+        yield cx + r, cy + 4
+        yield cx - r - lw, cy + 4
+        yield cx - lw / 2, cy - r - 2
+        yield cx - lw / 2, cy + r + 11
+
+
+def _box(lx: float, ly: float, lw: float) -> Box:
+    return (lx - 1, ly - 11, lx + lw + 1, ly + 3)
+
+
+def _overlap(a: Box, b: Box) -> bool:
+    return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
+
+
+def _inside(a: Box, frame: Box) -> bool:
+    return frame[0] <= a[0] and frame[1] <= a[1] and a[2] <= frame[2] and a[3] <= frame[3]
 
 
 def _esc(text: str) -> str:

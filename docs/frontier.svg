@@ -37,6 +37,7 @@
 <path class="hotl" d="M201.8 140.0H201.8M201.8 137.0v6M201.8 137.0v6" stroke="#c2185b"/>
 <path class="hotl" d="M201.8 268.0V76.0M198.8 268.0h6M198.8 76.0h6" stroke="#c2185b"/>
 <circle class="hot" cx="201.8" cy="140.0" r="4.5" fill="#c2185b"/>
-<text class="halo hot" x="539.3" y="100.0" fill="#c2185b" stroke="#fff" stroke-width="3" stroke-linejoin="round" paint-order="stroke">agent</text>
-<text class="halo hot" x="209.8" y="132.0" fill="#c2185b" stroke="#fff" stroke-width="3" stroke-linejoin="round" paint-order="stroke">workflow</text>
+<path d="M531.3 108.0L545.7 95.6" stroke="#bbb"/>
+<text class="halo hot" x="546.7" y="92.6" fill="#c2185b" stroke="#fff" stroke-width="3" stroke-linejoin="round" paint-order="stroke">agent</text>
+<text class="halo hot" x="135.2" y="144.0" fill="#c2185b" stroke="#fff" stroke-width="3" stroke-linejoin="round" paint-order="stroke">workflow</text>
 </svg>

@@ -714,6 +714,8 @@ def test_the_frontier_plot_keeps_labels_inside_names_what_it_left_out_and_can_zo
     assert x + 7.2 * len("a-harness-with-a-long-name") <= 640  # flipped to the left side
     ticks = re.findall(r'text-anchor="middle" class="mut" fill="#666">([\d.]+)<', text)
     assert ticks[0] == "0.000" and float(ticks[-1]) == 0.006  # no half-empty axis
+    places = re.findall(r'class="halo \w+" x="(-?[\d.]+)" y="(-?[\d.]+)"', text)
+    assert len(places) == 2 and all(0 < float(a) < 640 and 0 < float(b) < 452 for a, b in places)
     zoomed = frontier_svg(sums, "cost_per_task", "success", zero=False)
     ticks = re.findall(r'text-anchor="middle" class="mut" fill="#666">([\d.]+)<', zoomed)
     assert float(ticks[0]) > 0.004  # the axis starts just below the data
