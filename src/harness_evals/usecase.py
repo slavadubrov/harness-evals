@@ -7,8 +7,17 @@ from dataclasses import dataclass, field
 from math import isfinite
 from typing import Any
 
-from harness_evals.core import Episode, Grade, Task, grade
+from harness_evals.core import Check, Episode, Grade, Task, grade
 from harness_evals.metrics import POOLED, Metric
+
+# Summary keys a gate may name, beside the use case's own metrics.
+GATED = {"success", "pass^k", "violations", "infra_errors", "unknown_verdicts", "unknown_cost"}
+
+
+def _bound(spec: Any) -> bool:
+    """A gate or guardrail: ('>=' or '<=', a finite limit)."""
+    ok = isinstance(spec, tuple) and len(spec) == 2 and spec[0] in (">=", "<=")
+    return ok and isinstance(spec[1], int | float) and isfinite(spec[1])
 
 
 def check_guardrails(guardrails: Mapping[str, Any], metrics: Mapping[str, Metric]) -> None:
@@ -17,8 +26,7 @@ def check_guardrails(guardrails: Mapping[str, Any], metrics: Mapping[str, Metric
     for metric, spec in guardrails.items():
         if metric not in comparable:
             raise ValueError(f"guardrail on {metric!r}: compare one of {sorted(comparable)}")
-        ok = isinstance(spec, tuple) and len(spec) == 2 and spec[0] in (">=", "<=")
-        if not ok or not isinstance(spec[1], int | float) or not isfinite(spec[1]):
+        if not _bound(spec):
             raise ValueError(f"guardrail on {metric!r} needs ('>=' or '<=', a finite limit)")
 
 
@@ -43,6 +51,20 @@ class UseCase:
         ids = [t.id for t in self.tasks]
         if len(ids) != len(set(ids)):
             raise ValueError(f"duplicate task ids in {self.name}")
+        for t in self.tasks:
+            for c in t.checks:
+                if not isinstance(c, Check):
+                    raise ValueError(
+                        f"task {t.id!r}: wrap {c!r} in Check(name, fn) to use it as a check"
+                    )
+        known = GATED | set(POOLED) | set(self.metrics)
+        for metric, spec in self.gates.items():
+            if metric not in known:
+                raise ValueError(f"gate on {metric!r}: use one of {sorted(known)}")
+            if not _bound(spec):
+                raise ValueError(f"gate on {metric!r} needs ('>=' or '<=', a finite limit)")
+        if not isfinite(self.margin) or self.margin < 0:
+            raise ValueError("margin must be finite and nonnegative")
         check_guardrails(self.guardrails, self.metrics)
 
     def split(self, name: str) -> list[Task]:

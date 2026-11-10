@@ -1,10 +1,11 @@
-"""Markdown tables for summaries and comparisons, and an SVG plot of the frontier."""
+"""Markdown tables for summaries and comparisons, and two SVG figures: the frontier of
+two metrics, and a map of where each harness fails."""
 
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from html import escape
-from math import floor, log10
+from math import ceil, floor, hypot, isfinite, log10
 from typing import Any
 
 from harness_evals.compare import Comparison
@@ -64,6 +65,8 @@ def table(summaries: Mapping[str, Mapping[str, Any]], extra: list[str] | None = 
 
 
 def comparison(c: Comparison) -> str:
+    """A comparison in Markdown: the paired difference of every metric, then the decision
+    and its reasons."""
     lo, hi = c.ci
     lines = [
         f"**{c.candidate}** against **{c.base}** on {c.tasks} tasks: "
@@ -82,12 +85,25 @@ def comparison(c: Comparison) -> str:
         others.append(f"{name} {v:+.{digits}f} ({dlo:+.{digits}f} to {dhi:+.{digits}f})")
     if others:
         lines.append("Candidate minus base: " + "; ".join(others) + ".")
-    lines.append(f"Decision: **{c.decision}**. " + " ".join(c.reasons))
+    # By position, base then candidate: a caller may have renamed c.base and c.candidate.
+    models = [s.get("models") for s in c.summaries.values()]
+    if all(models) and models[0] != models[1]:  # the model was meant to stay fixed
+        lines.append(f"Models differ: {', '.join(models[0])} against {', '.join(models[1])}.")
+    lines.append(f"Decision: **{c.decision}**. " + "; ".join(c.reasons))
     return "\n".join(lines)
 
 
 def _tasks(n: int) -> str:
     return f"{n} task" + "s" * (n != 1)
+
+
+# Dark colours for a reader whose system prefers them; the attributes hold the light ones.
+_DARK = (
+    "<style>@media (prefers-color-scheme:dark){svg{fill:#e6edf3}.bg{fill:#0d1117}"
+    ".mut{fill:#9da7b3}.grid{stroke:#30363d}.off{fill:#c9d1d9}.offl{stroke:#c9d1d9}"
+    ".hot{fill:#ff6fb6}.hotl{stroke:#ff6fb6}.halo{stroke:#0d1117}}</style>"
+)
+LABELS = dict(REQUIRED)  # axis labels with units: "$ per task", "p95 latency, s"
 
 
 def frontier_svg(
@@ -97,15 +113,23 @@ def frontier_svg(
     *,
     lower: Iterable[str] = (),
     title: str = "",
+    zero: bool = True,
 ) -> str:
     """Every harness that has both metrics, with each metric's 95% interval as an error
-    bar and a line through the frontier (metrics.pareto). Others are left out."""
-    pts = {h: s for h, s in summaries.items() if s.get(x) is not None and s.get(y) is not None}
+    bar and a line through the frontier (metrics.pareto). A harness without one of the
+    metrics is named under the title. ``zero=False`` starts each axis just below the
+    data instead of at zero, to tell close variants apart."""
+
+    def number(v: Any) -> bool:
+        return isinstance(v, int | float) and not isinstance(v, bool) and isfinite(v)
+
+    pts = {h: s for h, s in summaries.items() if number(s.get(x)) and number(s.get(y))}
     if not pts:
         raise ValueError(f"no harness has both {x} and {y}")
+    left_out = [h for h in summaries if h not in pts]
     front = pareto(pts, x, y, lower=lower)
-    w, h, left, right, top, bottom = 640, 440, 76, 28, 64, 56
-    (x0, x1), (y0, y1) = _axis(pts, x), _axis(pts, y)
+    w, h, left, right, top, bottom = 640, 452, 76, 40, 76, 56
+    (x0, x1, xstep), (y0, y1, ystep) = _axis(pts, x, zero), _axis(pts, y, zero)
 
     def px(v: float) -> float:
         return left + (v - x0) / (x1 - x0) * (w - left - right)
@@ -113,64 +137,160 @@ def frontier_svg(
     def py(v: float) -> float:
         return h - bottom - (v - y0) / (y1 - y0) * (h - top - bottom)
 
-    title = title or f"{y} against {x}"
+    xl, yl = LABELS.get(x, x), LABELS.get(y, y)
+    title = title or f"{yl} against {xl}"
     o = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" role="img" '
         f'font-family="system-ui, sans-serif" font-size="13" fill="#222">',
-        f"<title>{escape(title)}</title>",
-        f'<rect width="{w}" height="{h}" fill="#fff"/>',
-        f'<text x="{left}" y="24" font-size="15" font-weight="600">{escape(title)}</text>',
-        f'<text x="{left}" y="44" fill="#666">Bars: 95% intervals over tasks. '
-        f'<tspan fill="#c2185b">Line: no other harness beats these on both.</tspan></text>',
+        f"<title>{_esc(title)}</title>",
+        _DARK,
+        f'<rect class="bg" width="{w}" height="{h}" fill="#fff"/>',
+        f'<text x="{left}" y="24" font-size="15" font-weight="600">{_esc(title)}</text>',
+        f'<text x="{left}" y="44" class="mut" fill="#666">Bars: 95% intervals over tasks. '
+        f'<tspan class="hot" fill="#c2185b">Pink: no other harness beats it on both.</tspan>'
+        "</text>",
     ]
-    for i in range(6):
-        vx, vy = x0 + (x1 - x0) * i / 5, y0 + (y1 - y0) * i / 5
+    if left_out:
+        names = ", ".join(left_out)
+        o.append(
+            f'<text x="{left}" y="62" class="mut" fill="#666">'
+            f"Left out, a metric is missing: {_esc(names)}</text>"
+        )
+    for vx in _ticks(x0, x1, xstep):
         o += [
-            f'<path d="M{px(vx):.1f} {top}V{h - bottom}M{left} {py(vy):.1f}H{w - right}" '
-            f'stroke="#e6e6e6"/>',
-            f'<text x="{px(vx):.1f}" y="{h - bottom + 18}" text-anchor="middle" fill="#666">'
-            f"{_tick(vx, x1 - x0)}</text>",
-            f'<text x="{left - 8}" y="{py(vy) + 4:.1f}" text-anchor="end" fill="#666">'
-            f"{_tick(vy, y1 - y0)}</text>",
+            f'<path class="grid" d="M{px(vx):.1f} {top}V{h - bottom}" stroke="#e6e6e6"/>',
+            f'<text x="{px(vx):.1f}" y="{h - bottom + 18}" text-anchor="middle" class="mut" '
+            f'fill="#666">{_tick(vx, xstep)}</text>',
+        ]
+    for vy in _ticks(y0, y1, ystep):
+        o += [
+            f'<path class="grid" d="M{left} {py(vy):.1f}H{w - right}" stroke="#e6e6e6"/>',
+            f'<text x="{left - 8}" y="{py(vy) + 4:.1f}" text-anchor="end" class="mut" '
+            f'fill="#666">{_tick(vy, ystep)}</text>',
         ]
     o += [
-        f'<text x="{(left + w - right) / 2}" y="{h - 14}" text-anchor="middle">{escape(x)}</text>',
+        f'<text x="{(left + w - right) / 2}" y="{h - 14}" text-anchor="middle">{_esc(xl)}</text>',
         f'<text transform="translate(20 {(top + h - bottom) / 2}) rotate(-90)" '
-        f'text-anchor="middle">{escape(y)}</text>',
+        f'text-anchor="middle">{_esc(yl)}</text>',
     ]
     line = sorted((pts[n][x], pts[n][y]) for n in front)
     o.append(
-        '<polyline fill="none" stroke="#c2185b" stroke-width="2" points="'
+        '<polyline class="hotl" fill="none" stroke="#c2185b" stroke-width="2" points="'
         + " ".join(f"{px(a):.1f},{py(b):.1f}" for a, b in line)
         + '"/>'
     )
-    placed: list[tuple[float, float, float]] = []  # label boxes: x, y, width
+    for name, s in pts.items():  # every mark first, so that no mark covers a label
+        cx, cy = px(s[x]), py(s[y])
+        hot = name in front
+        cls, color = ("hotl", "#c2185b") if hot else ("offl", "#444")
+        if ci := s.get(f"{x}_ci"):
+            a, b = px(ci[0]), px(ci[1])
+            d = f"M{a:.1f} {cy:.1f}H{b:.1f}M{a:.1f} {cy - 3:.1f}v6M{b:.1f} {cy - 3:.1f}v6"
+            o.append(f'<path class="{cls}" d="{d}" stroke="{color}"/>')
+        if ci := s.get(f"{y}_ci"):
+            a, b = py(ci[0]), py(ci[1])
+            d = f"M{cx:.1f} {a:.1f}V{b:.1f}M{cx - 3:.1f} {a:.1f}h6M{cx - 3:.1f} {b:.1f}h6"
+            o.append(f'<path class="{cls}" d="{d}" stroke="{color}"/>')
+        o.append(
+            f'<circle class="{"hot" if hot else "off"}" cx="{cx:.1f}" cy="{cy:.1f}" r="4.5" '
+            f'fill="{color}"/>'
+        )
+    # Labels go last, each at the first spot around its point, nearest first, that covers
+    # no mark, no part of the frontier line and no earlier label, and stays in the frame.
+    taken: list[Box] = []
+    for s in pts.values():
+        cx, cy = px(s[x]), py(s[y])
+        taken.append((cx - 6, cy - 6, cx + 6, cy + 6))
+        if ci := s.get(f"{x}_ci"):
+            taken.append((px(ci[0]), cy - 2, px(ci[1]), cy + 2))
+        if ci := s.get(f"{y}_ci"):
+            taken.append((cx - 2, py(ci[1]), cx + 2, py(ci[0])))
+    dots = [(px(a), py(b)) for a, b in line]
+    for (ax, ay), (bx, by) in zip(dots, dots[1:], strict=False):
+        n = max(1, int(hypot(bx - ax, by - ay) / 8))  # the line, as a chain of small boxes
+        for i in range(n + 1):
+            u, v = ax + (bx - ax) * i / n, ay + (by - ay) * i / n
+            taken.append((u - 2, v - 2, u + 2, v + 2))
+    frame = (left + 2, top - 10, w - 4, h - bottom - 2)
     for name, s in pts.items():
         cx, cy = px(s[x]), py(s[y])
-        color = "#c2185b" if name in front else "#444"
-        if ci := s.get(f"{x}_ci"):
-            o.append(f'<path d="M{px(ci[0]):.1f} {cy:.1f}H{px(ci[1]):.1f}" stroke="{color}"/>')
-        if ci := s.get(f"{y}_ci"):
-            o.append(f'<path d="M{cx:.1f} {py(ci[0]):.1f}V{py(ci[1]):.1f}" stroke="{color}"/>')
-        o.append(f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="4.5" fill="{color}"/>')
-        lx, ly, lw = cx + 8, cy - 8, 7.2 * len(name)
-        while any(abs(ly - b) < 15 and lx < a + c and a < lx + lw for a, b, c in placed):
-            ly += 15  # Greedy nudge downward: enough for a handful of harnesses.
-        placed.append((lx, ly, lw))
-        if ly > cy - 8:  # moved: a leader line keeps the label with its point
-            o.append(f'<path d="M{cx:.1f} {cy:.1f}L{lx - 2:.1f} {ly - 4:.1f}" stroke="#bbb"/>')
-        o.append(f'<text x="{lx:.1f}" y="{ly:.1f}" fill="{color}">{escape(name)}</text>')
+        lw = 7.2 * len(name)
+        lx, ly = next(
+            (
+                spot
+                for spot in _spots(cx, cy, lw)
+                if _inside(_box(*spot, lw), frame)
+                and not any(_overlap(_box(*spot, lw), t) for t in taken)
+            ),
+            (min(cx + 8, w - 4 - lw), cy - 8),  # nowhere is free: beside the point
+        )
+        box = _box(lx, ly, lw)
+        taken.append(box)
+        # The label's point nearest to its mark.
+        ex, ey = min(max(cx, box[0]), box[2]), min(max(cy, box[1]), box[3])
+        if hypot(ex - cx, ey - cy) > 14:  # far from its point: a leader line joins them
+            o.append(f'<path d="M{cx:.1f} {cy:.1f}L{ex:.1f} {ey:.1f}" stroke="#bbb"/>')
+        hot = name in front
+        o.append(
+            f'<text class="halo {"hot" if hot else "off"}" x="{lx:.1f}" y="{ly:.1f}" '
+            f'fill="{"#c2185b" if hot else "#444"}" stroke="#fff" stroke-width="3" '
+            f'stroke-linejoin="round" paint-order="stroke">{_esc(name)}</text>'
+        )
     o.append("</svg>")
     return "\n".join(o) + "\n"
 
 
-def _axis(pts: Mapping[str, Mapping[str, Any]], m: str) -> tuple[float, float]:
-    """From a nice bound below the values and intervals, or zero, to one above, or zero."""
-    vals = [v for s in pts.values() for v in (s[m], *(s.get(f"{m}_ci") or ()))]
+Box = tuple[float, float, float, float]  # left, top, right, bottom
+
+
+def _spots(cx: float, cy: float, lw: float) -> Iterable[tuple[float, float]]:
+    """Places for a label of width ``lw`` around a point, as (left, baseline), nearest
+    first: the four diagonals, then beside, above and below, at growing distances."""
+    for r in (9, 22, 36, 52, 70, 90):
+        d = r * 0.7
+        yield cx + d, cy - d
+        yield cx + d, cy + d + 9
+        yield cx - d - lw, cy - d
+        yield cx - d - lw, cy + d + 9
+        yield cx + r, cy + 4
+        yield cx - r - lw, cy + 4
+        yield cx - lw / 2, cy - r - 2
+        yield cx - lw / 2, cy + r + 11
+
+
+def _box(lx: float, ly: float, lw: float) -> Box:
+    return (lx - 1, ly - 11, lx + lw + 1, ly + 3)
+
+
+def _overlap(a: Box, b: Box) -> bool:
+    return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
+
+
+def _inside(a: Box, frame: Box) -> bool:
+    return frame[0] <= a[0] and frame[1] <= a[1] and a[2] <= frame[2] and a[3] <= frame[3]
+
+
+def _esc(text: str) -> str:
+    """Escaped for XML, without the control characters XML 1.0 forbids."""
+    return escape("".join(ch for ch in str(text) if ch >= " " or ch in "\t\n"))
+
+
+def _axis(pts: Mapping[str, Mapping[str, Any]], m: str, zero: bool) -> tuple[float, float, float]:
+    """The axis for a metric: from a tick at or below the values and their intervals to
+    one at or above them, and the tick step. With ``zero`` the axis includes zero."""
+    vals = [v for s in pts.values() for v in (s[m], *(s.get(f"{m}_ci") or ())) if isfinite(v)]
     lo, hi = min(vals), max(vals)
-    bottom = -_nice(-lo) if lo < 0 else 0.0
-    top = _nice(hi) if hi > 0 else 0.0
-    return (bottom, top) if top > bottom else (0.0, 1.0)
+    if zero:
+        lo, hi = min(lo, 0.0), max(hi, 0.0)
+    if hi <= lo:  # one value: give it room
+        pad = abs(hi) * 0.1 or 0.5
+        lo, hi = (0.0, 1.0) if zero and hi == 0 else (lo - pad, hi + pad)
+    step = _nice((hi - lo) / 5)
+    return floor(lo / step + 1e-9) * step, ceil(hi / step - 1e-9) * step, step
+
+
+def _ticks(lo: float, hi: float, step: float) -> list[float]:
+    return [lo + i * step for i in range(round((hi - lo) / step) + 1)]
 
 
 def _nice(v: float) -> float:
@@ -179,10 +299,10 @@ def _nice(v: float) -> float:
     return next(m * mag for m in (1, 2, 2.5, 5, 10) if m * mag >= v * (1 - 1e-9))
 
 
-def _tick(v: float, span: float) -> str:
-    step = span / 5  # the fewest decimals that show every tick exactly
-    decimals = next((d for d in range(7) if abs(round(step, d) - step) < 1e-9 * step), 6)
-    return f"{v:.{decimals}f}"
+def _tick(v: float, step: float) -> str:
+    """The fewest decimals that show every tick exactly."""
+    decimals = next((d for d in range(9) if abs(round(step, d) - step) < 1e-9 * step), 8)
+    return f"{0.0 if abs(v) < step * 1e-9 else v:.{decimals}f}"
 
 
 def check_kind(name: str) -> str:
@@ -209,10 +329,11 @@ def failure_map_svg(
     if not tasks:
         raise ValueError("no graded runs of the use case's tasks")
     cols, cells = _failure_cells(tasks, grades, by, group)
+    shown = {c: c if len(c) <= 28 else c[:27] + "…" for c in cols}  # the header stays short
 
     size, pitch, char = 13, 16, 7.2  # cell, grid step, width of a 13px character
     label_w = 16 + char * min(44, max(len(t.id) for t in tasks))
-    head = 28 + (char * max(map(len, cols)) if by == "checks" else 14)  # labels stand upright
+    head = 28 + (char * max(len(v) for v in shown.values()) if by == "checks" else 14)
     panel_w = {h: max(len(cols) * pitch, char * len(h)) + 28 for h in grades}
     top = 78 + head
     legend_w = 16 + 5 * (size + 22) + 6.6 * len("every run passedsome runs failedevery run failed")
@@ -232,9 +353,10 @@ def failure_map_svg(
     o = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width:.0f} {height:.0f}" '
         f'role="img" font-family="system-ui, sans-serif" font-size="13" fill="#222">',
-        f"<title>{escape(title)}</title>",
-        f'<rect width="{width:.0f}" height="{height:.0f}" fill="#fff"/>',
-        f'<text x="16" y="26" font-size="15" font-weight="600">{escape(title)}</text>',
+        f"<title>{_esc(title)}</title>",
+        _DARK,
+        f'<rect class="bg" width="{width:.0f}" height="{height:.0f}" fill="#fff"/>',
+        f'<text x="16" y="26" font-size="15" font-weight="600">{_esc(title)}</text>',
     ]
     half = f'<rect y="{size / 2}" width="{size}" height="{size / 2}" fill="{red}"/>'
     legend = [
@@ -249,7 +371,7 @@ def failure_map_svg(
     x = 16.0
     for glyph, text in legend:
         o.append(f'<g transform="translate({x:.0f} 42)">{glyph}</g>')
-        o.append(f'<text x="{x + size + 6:.0f}" y="53" fill="#555">{text}</text>')
+        o.append(f'<text x="{x + size + 6:.0f}" y="53" class="mut" fill="#555">{text}</text>')
         x += size + 22 + 6.6 * len(text)
     for i, t in enumerate(tasks):
         name = t.id if len(t.id) <= 44 else t.id[:43] + "…"
@@ -265,7 +387,10 @@ def failure_map_svg(
                 if by == "checks"
                 else f'x="{cx:.1f}" y="{top - 6:.0f}" text-anchor="middle"'
             )
-            o.append(f'<text {at} fill="#555">{escape(c)}</text>')
+            if by == "runs" and len(cols) > 12 and j and (j + 1) % 5:
+                continue  # many runs: number the first and every fifth
+            tip = f"<title>{_esc(c)}</title>" if shown[c] != c else ""
+            o.append(f'<text {at} class="mut" fill="#555">{tip}{_esc(shown[c])}</text>')
         for i, t in enumerate(tasks):
             for j, c in enumerate(cols):
                 x, y = x0 + j * pitch, top + i * pitch
