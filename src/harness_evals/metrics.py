@@ -12,7 +12,7 @@ import random
 import statistics
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from math import ceil, comb
+from math import ceil, comb, isfinite
 from typing import Any
 
 from harness_evals.core import Grade
@@ -272,6 +272,16 @@ def summarize(
     return s
 
 
+def coordinate(summary: Mapping[str, Any], metric: str) -> float | None:
+    """A finite frontier coordinate; cost requires measured costs for every run."""
+    if metric.startswith("cost") and summary.get("unknown_cost"):
+        return None
+    value = summary.get(metric)
+    if not isinstance(value, int | float) or isinstance(value, bool) or not isfinite(value):
+        return None
+    return value
+
+
 def pareto(
     summaries: Mapping[str, Mapping[str, Any]], x: str, y: str, *, lower: Iterable[str] = ()
 ) -> list[str]:
@@ -282,8 +292,8 @@ def pareto(
     low = LOWER_IS_BETTER | ({lower} if isinstance(lower, str) else set(lower))
 
     def score(s: Mapping[str, Any], m: str) -> float | None:
-        v = s.get(m)
-        if not isinstance(v, int | float) or v != v:  # missing, not a number, or NaN
+        v = coordinate(s, m)
+        if v is None:
             return None
         return -v if m in low else v
 

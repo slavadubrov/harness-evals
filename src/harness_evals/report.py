@@ -10,7 +10,7 @@ from typing import Any
 
 from harness_evals.compare import Comparison
 from harness_evals.core import Grade
-from harness_evals.metrics import pareto
+from harness_evals.metrics import coordinate, pareto
 from harness_evals.usecase import UseCase
 
 REQUIRED = [
@@ -120,10 +120,11 @@ def frontier_svg(
     metrics is named under the title. ``zero=False`` starts each axis just below the
     data instead of at zero, to tell close variants apart."""
 
-    def number(v: Any) -> bool:
-        return isinstance(v, int | float) and not isinstance(v, bool) and isfinite(v)
-
-    pts = {h: s for h, s in summaries.items() if number(s.get(x)) and number(s.get(y))}
+    pts = {
+        h: s
+        for h, s in summaries.items()
+        if coordinate(s, x) is not None and coordinate(s, y) is not None
+    }
     if not pts:
         raise ValueError(f"no harness has both {x} and {y}")
     left_out = [h for h in summaries if h not in pts]
@@ -154,7 +155,7 @@ def frontier_svg(
         names = ", ".join(left_out)
         o.append(
             f'<text x="{left}" y="62" class="mut" fill="#666">'
-            f"Left out, a metric is missing: {_esc(names)}</text>"
+            f"Left out, a metric is missing or incomplete: {_esc(names)}</text>"
         )
     for vx in _ticks(x0, x1, xstep):
         o += [

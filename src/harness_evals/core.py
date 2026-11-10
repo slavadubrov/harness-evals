@@ -110,7 +110,7 @@ def grade(task: Task, e: Episode) -> Grade:
             v = c(e)
         except Exception:  # noqa: BLE001 - a check that cannot run is missing evidence
             v = None
-        if v is None:
+        if type(v) is not bool:
             unknown.append(c.name)
         elif not v:
             failed.append(c.name)

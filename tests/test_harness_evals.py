@@ -208,10 +208,45 @@ def test_missing_cost_cannot_establish_that_a_candidate_is_cheaper():
     assert compare(uc, base, cand).decision == "inconclusive"
 
 
-def test_equal_success_and_known_lower_cost_need_no_loss_margin():
-    uc, base = grades_for({f"t{i}": [True, True] for i in range(6)}, "base", cost=0.01)
-    _, cand = grades_for({f"t{i}": [True, True] for i in range(6)}, "cand", cost=0.001)
-    assert compare(uc, base, cand).decision == "adopt"
+@pytest.mark.parametrize("outcomes", [[True] * 10, [False] * 10, [True, False] * 5])
+@pytest.mark.parametrize("margin", [0.0, 0.02])
+def test_equal_task_success_cannot_establish_noninferiority(outcomes, margin):
+    pattern = {f"t{i}": outcomes for i in range(16)}
+    uc, base = grades_for(pattern, "base", cost=0.01)
+    _, cand = grades_for(pattern, "cand", cost=0.001)
+    uc.margin = margin
+    c = compare(uc, base, cand)
+    assert c.ci == (0.0, 0.0)  # keep the descriptive bootstrap result
+    assert c.decision == "inconclusive" and "zero-width" in c.reasons[0]
+
+
+@pytest.mark.parametrize("margin, decision", [(0.2, "inconclusive"), (0.05, "reject")])
+def test_constant_success_loss_does_not_support_cost_only_adoption(margin, decision):
+    uc, base = grades_for({f"t{i}": [True] * 10 for i in range(8)}, "base", cost=0.01)
+    _, cand = grades_for({f"t{i}": [True] * 9 + [False] for i in range(8)}, "cand", cost=0.001)
+    uc.margin = margin
+    c = compare(uc, base, cand)
+    assert c.ci[0] == c.ci[1] == pytest.approx(-0.1)
+    assert c.decision == decision
+
+
+def test_roundoff_cannot_make_a_constant_success_loss_support_cost_only_adoption():
+    counts = [2, 3, 5, 10, 20, 40, 60, 99]
+    uc, base = grades_for(
+        {f"t{i}": [True] * n + [False] * (100 - n) for i, n in enumerate(counts)},
+        "base",
+        cost=0.01,
+    )
+    _, cand = grades_for(
+        {f"t{i}": [True] * (n - 1) + [False] * (101 - n) for i, n in enumerate(counts)},
+        "cand",
+        cost=0.001,
+    )
+    uc.margin = 0.02
+    c = compare(uc, base, cand)
+    # Each task loses exactly 1/100; subtraction leaves a tiny numerical interval.
+    assert 0 < c.ci[1] - c.ci[0] < 1e-15
+    assert c.decision == "inconclusive" and "zero-width" in c.reasons[0]
 
 
 def test_fewer_than_six_tasks_cannot_decide_on_an_interval():
@@ -624,8 +659,11 @@ def test_comparisons_report_paired_intervals_for_cost_latency_and_use_case_metri
 
 
 def test_cheaper_means_the_whole_cost_interval_lies_below_zero():
-    uc, base = grades_for({f"t{i}": [True] * 2 for i in range(8)}, "base")
-    _, cand = grades_for({f"t{i}": [True] * 2 for i in range(8)}, "cand")
+    uc, base = grades_for({f"t{i}": [True, False] for i in range(8)}, "base")
+    _, cand = grades_for({f"t{i}": [True, i == 0] for i in range(8)}, "cand")
+    # Success has a nonzero interval starting at zero; cost must establish the benefit.
+    c = compare(uc, base, cand)
+    assert c.ci[0] == 0 < c.ci[1]
     for i, g in enumerate(cand):  # cheaper on average, dearer on half the tasks
         g.episode.cost_usd = 0.0001 if i % 4 < 2 else 0.0017
     for g in base:
@@ -641,7 +679,7 @@ def test_a_guardrail_rejects_a_cheaper_candidate_that_is_clearly_slower():
     _, cand = grades_for({f"t{i}": [True] * 3 for i in range(6)}, "cand", cost=0.001)
     for g in cand:
         g.episode.latency_s = 6.0  # the base takes 1 s
-    assert compare(uc, base, cand).decision == "adopt"
+    assert compare(uc, base, cand).decision == "inconclusive"
     uc.guardrails = {"latency_p95": ("<=", 2.0)}
     c = compare(uc, base, cand)
     assert c.decision == "reject" and c.reasons[0].startswith("latency_p95 changes by +5.00")
@@ -709,7 +747,7 @@ def test_the_frontier_plot_keeps_labels_inside_names_what_it_left_out_and_can_zo
     text = frontier_svg(sums, "cost_per_task", "success")
     ET.fromstring(text)  # well-formed, with no nan coordinates
     assert "nan" not in text.replace("not-a-number", "")
-    assert "Left out, a metric is missing: no-cost, not-a-number" in text
+    assert "Left out, a metric is missing or incomplete: no-cost, not-a-number" in text
     x = float(re.search(r'x="([\d.]+)" y="[\d.]+" fill="#\w+" [^>]*>a-harness', text).group(1))
     assert x + 7.2 * len("a-harness-with-a-long-name") <= 640  # flipped to the left side
     ticks = re.findall(r'text-anchor="middle" class="mut" fill="#666">([\d.]+)<', text)
@@ -980,3 +1018,158 @@ def test_a_comparison_names_the_models_when_they_differ_even_after_a_rename():
     text = comparison(c)
     assert "Models differ: small-0613 against large-1106." in text
     assert "**the candidate** against **the current design**" in text
+
+
+@pytest.mark.parametrize("verdict", ["false", "unknown", 1, 0, [], {}])
+def test_invalid_check_verdicts_are_unknown(verdict):
+    g = grade(task(Check("custom", lambda e: verdict, critical=True)), Episode("t"))
+    assert not g.passed and g.unknown == ["custom"]
+    assert g.failed == g.violations == []
+
+
+def test_loaded_string_judge_and_state_verdicts_never_pass(tmp_path):
+    path = tmp_path / "episodes.jsonl"
+    path.write_text('{"task_id": "t", "state_ok": "true", "judgements": {"ok": "false"}}\n')
+    (g,) = UseCase("u", [task(state(), judged("ok"))]).grade(load(path))
+    assert not g.passed and g.unknown == ["state", "judge ok"]
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "missing_task",
+        "missing_trial",
+        "duplicate",
+        "extra_task",
+        "other_split",
+        "empty",
+        "negative_trial",
+        "high_trial",
+        "float_trial",
+        "bool_trial",
+        "string_trial",
+        "missing_count",
+        "zero_count",
+        "float_count",
+        "bool_count",
+    ],
+)
+def test_cli_requires_exact_manifest_task_and_trial_coverage(tmp_path, monkeypatch, capsys, change):
+    from types import SimpleNamespace
+
+    from harness_evals.cli import main
+
+    uc = UseCase(
+        "u",
+        [task(state(), id=f"t{i}") for i in range(7)]
+        + [Task("holdout", "input", (state(),), split="holdout")],
+    )
+    monkeypatch.setitem(sys.modules, "coverage_usecase", SimpleNamespace(USECASE=uc))
+
+    def adapter(tasks, trial):
+        return [Episode(t.id, state_ok=True, cost_usd=0.01) for t in tasks]
+
+    episodes = run(
+        uc, {"base": adapter, "candidate": adapter}, trials=2, frozen={"model": "m"}, out=tmp_path
+    )
+    path = tmp_path / "episodes.jsonl"
+    if change == "missing_task":
+        episodes = [e for e in episodes if e.task_id != "t6"]
+    elif change == "missing_trial":
+        episodes = [e for e in episodes if not (e.task_id == "t6" and e.trial == 1)]
+    elif change == "duplicate":
+        episodes.append(episodes[0])
+    elif change in ("extra_task", "other_split"):
+        for e in episodes:
+            if e.task_id == "t0":
+                e.task_id = "unexpected" if change == "extra_task" else "holdout"
+    elif change == "empty":
+        episodes = []
+    elif change.endswith("_trial"):
+        episodes[0].trial = {
+            "negative_trial": -1,
+            "high_trial": 2,
+            "float_trial": 0.0,
+            "bool_trial": False,
+            "string_trial": "0",
+        }[change]
+    else:
+        manifest_path = tmp_path / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        if change == "missing_count":
+            del manifest["trials"]
+        else:
+            manifest["trials"] = {"zero_count": 0, "float_count": 2.0, "bool_count": True}[change]
+        manifest_path.write_text(json.dumps(manifest))
+    save(episodes, path)
+    with pytest.raises(SystemExit, match="coverage|trial|task|episodes"):
+        main(
+            [
+                "compare",
+                str(path),
+                "--usecase",
+                "coverage_usecase",
+                "--base",
+                "base",
+                "--candidate",
+                "candidate",
+            ]
+        )
+    assert "Decision:" not in capsys.readouterr().out
+
+
+def test_cli_accepts_complete_present_harnesses_from_one_manifest(tmp_path, monkeypatch, capsys):
+    from types import SimpleNamespace
+
+    from harness_evals.cli import main
+
+    uc = UseCase("u", [task(state())])
+    monkeypatch.setitem(sys.modules, "subset_usecase", SimpleNamespace(USECASE=uc))
+
+    def adapter(tasks, trial):
+        return [Episode("t", state_ok=True)]
+
+    episodes = run(
+        uc, {"base": adapter, "candidate": adapter}, trials=2, frozen={"model": "m"}, out=tmp_path
+    )
+    paths = []
+    for name in ("base", "candidate"):
+        path = tmp_path / f"{name}.jsonl"
+        save([e for e in episodes if e.harness == name], path)
+        paths.append(str(path))
+    main(
+        [
+            "compare",
+            *paths,
+            "--usecase",
+            "subset_usecase",
+            "--base",
+            "base",
+            "--candidate",
+            "candidate",
+        ]
+    )
+    assert "Decision:" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("x,y", [("cost_per_task", "success"), ("success", "cost_per_task")])
+def test_cost_frontiers_omit_partial_costs_and_name_the_omission(x, y):
+    import xml.etree.ElementTree as ET
+
+    from harness_evals import frontier_svg
+
+    _, complete = grades_for({"a": [True], "b": [True]}, "complete", cost=1.0)
+    _, partial = grades_for({"a": [True], "b": [True]}, "partial", cost=0.0)
+    partial[1].episode.cost_usd = None
+    sums = {"complete": summarize(complete), "partial": summarize(partial)}
+    assert sums["partial"]["cost_per_task"] == 0.0
+    assert pareto(sums, x, y) == ["complete"]
+    svg = frontier_svg(sums, x, y)
+    root = ET.fromstring(svg)
+    assert len(root.findall("{http://www.w3.org/2000/svg}circle")) == 1
+    assert "Left out, a metric is missing or incomplete: partial" in svg
+    assert pareto(sums, "latency_p50", "success") == ["complete", "partial"]
+    with pytest.raises(ValueError, match="no harness has both"):
+        pareto({"partial": sums["partial"]}, x, y)
+    with pytest.raises(ValueError, match="no harness has both"):
+        frontier_svg({"partial": sums["partial"]}, x, y)

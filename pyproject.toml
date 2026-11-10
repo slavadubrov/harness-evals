@@ -1,6 +1,6 @@
 [project]
 name = "harness-evals"
-version = "0.5.0"
+version = "0.5.1"
 description = "Evaluate an agent harness or workflow with the model held fixed: use-case tasks, repeated trials, hard checks, paired comparisons."
 readme = "README.md"
 license = "MIT"

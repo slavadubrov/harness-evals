@@ -7,7 +7,7 @@ import statistics
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from math import isfinite
+from math import isclose, isfinite
 from typing import Any
 
 from harness_evals.core import Grade
@@ -26,8 +26,7 @@ OPS = {">=": operator.ge, "<=": operator.le}
 Delta = tuple[float, tuple[float, float]]  # candidate minus base, and its 95% interval
 # Compared in every comparison, beside success and the use case's metrics and guardrails.
 COMPARED = ("cost_per_task", "latency_p50", "latency_p95", "calls_per_task", "tokens_per_task")
-# With fewer tasks, differences that all point the same way still cannot reach 95%
-# (a sign test on 5 tasks gives p = 0.0625), so an interval over them decides nothing.
+# Minimum sample policy for interval-based decisions; this does not guarantee coverage.
 MIN_TASKS = 6
 
 
@@ -170,6 +169,11 @@ def decide(
     known = not (sb.get("unknown_cost") or sc.get("unknown_cost"))
     if lo > 0:
         win = f"success is higher: {lo:+.3f} to {hi:+.3f}"
+    elif isclose(lo, hi, rel_tol=0.0, abs_tol=1e-15):
+        return "inconclusive", [
+            "a zero-width success interval does not establish the allowed loss; keep the base",
+            *unsure,
+        ]
     elif lo >= -m and known and cost is not None and cost[1][1] < 0:
         clo, chi = cost[1]
         win = (

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="652" viewBox="0 0 960 652" role="img" aria-labelledby="title desc">
 <title id="title">The adoption rule</title>
-<desc id="desc">compare(usecase, base, candidate) asks six questions in order and the first yes decides. 1: the candidate misses a gate, reject. 2: it has more critical violations than the base, reject. 3: the base misses a gate, adopt. 4: the success interval lies entirely below minus margin, or a guardrail's interval lies entirely past its limit, reject. 5: the success interval lies entirely above 0 and every guardrail stays within its limit, adopt. 6: its lower bound is at least minus margin, the cost interval lies below 0 and every guardrail holds, adopt. Otherwise inconclusive: keep the base and add tasks or runs. A number line shows four example intervals and the refund-desk case, where the interval proves nothing but step 3 adopts the workflow because the agent misses the violations gate.</desc>
+<desc id="desc">compare(usecase, base, candidate) asks six questions in order and the first yes decides. 1: the candidate misses a gate, reject. 2: it has more critical violations than the base, reject. 3: the base misses a gate, adopt. 4: the success interval lies entirely below minus margin, or a guardrail's interval lies entirely past its limit, reject. 5: the success interval lies entirely above 0 and every guardrail stays within its limit, adopt. 6: its success interval has nonzero width, its lower bound is at least minus margin, the cost interval lies below 0 and every guardrail holds, adopt. Steps 4 to 6 require at least six tasks. Otherwise inconclusive: keep the base and add tasks or runs. Equal observed task success rates cannot establish the allowed loss. A number line shows four example intervals and the refund-desk case, where the interval proves nothing but step 3 adopts the workflow because the agent misses the violations gate.</desc>
 <style>
 :root {
   --bg: #f6f8fa;
@@ -174,7 +174,7 @@ text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', 
 <rect x="0" y="0" width="960" height="4" fill="url(#brand)" clip-path="url(#card)"/>
 <text x="40" y="42" class="eyebrow x-teal">THE ADOPTION RULE</text>
 <text x="40" y="72" class="h1">Adopt, reject or keep investigating</text>
-<text x="40" y="97" class="sub">The first yes decides. Without clear evidence for the candidate, keep the base.</text>
+<text x="40" y="97" class="sub">The first yes decides. Steps 4–6 require at least six tasks.</text>
 <rect x="40" y="128" width="262.2" height="26" rx="13" class="f-teal"/><use href="#i-compare" x="48" y="134.8" width="12.5" height="12.5" class="i-teal"/><text x="65.5" y="145.1" class="m x-teal" style="font-size:11.5px">compare(usecase, base, candidate)</text>
 <path d="M64 154 V178" class="line" fill="none" stroke-width="1.4" marker-end="url(#a-line)" stroke-linecap="round" stroke-linejoin="round"/>
 <rect x="40" y="182" width="330" height="50" rx="10" class="panel sh"/>
@@ -225,7 +225,7 @@ text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', 
 <rect x="40" y="522" width="330" height="50" rx="10" class="panel sh"/>
 <circle cx="62" cy="547" r="11" class="k-slate"/><text x="62" y="551" text-anchor="middle" class="bold" style="font-size:11.5px; fill: var(--panel)">6</text>
 <text x="84" y="543" class="h3">Lower bound ≥ −margin and cheaper?</text>
-<text x="84" y="560" class="s">cost interval below 0; guardrails hold</text>
+<text x="84" y="560" class="s">nonzero success width; cost &lt; 0; guardrails hold</text>
 <path d="M372 547.0 H406" class="s-green" fill="none" stroke-width="1.5" marker-end="url(#a-green)" stroke-linecap="round" stroke-linejoin="round"/>
 <text x="390" y="541" class="s" text-anchor="middle">yes</text>
 <rect x="412" y="534" width="76.6" height="26" rx="13" class="f-green"/><use href="#i-check" x="420" y="541" width="12" height="12" class="i-green"/><text x="437" y="551" class="b x-green bold" style="font-size:11px">ADOPT</text>

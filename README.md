@@ -27,9 +27,9 @@ and where each one fails.
 ## Install
 
 ```bash
-uv add "harness-evals @ git+https://github.com/slavadubrov/harness-evals@v0.5.0"
+uv add "harness-evals @ git+https://github.com/slavadubrov/harness-evals@v0.5.1"
 # or
-pip install "git+https://github.com/slavadubrov/harness-evals@v0.5.0"
+pip install "git+https://github.com/slavadubrov/harness-evals@v0.5.1"
 ```
 
 ## Quickstart
@@ -38,7 +38,7 @@ The example runs offline in a second. It is in the repository, not in the instal
 package:
 
 ```bash
-git clone --depth 1 --branch v0.5.0 https://github.com/slavadubrov/harness-evals
+git clone --depth 1 --branch v0.5.1 https://github.com/slavadubrov/harness-evals
 cd harness-evals
 uv run python examples/refund_desk.py out
 ```
@@ -151,9 +151,10 @@ Check("reply under 80 characters", lambda e: e.reply is not None and len(e.reply
 ```
 
 Return a real `True` or `False`: `None` means the evidence is missing and is reported as
-undecided, so write `bool(re.search(...))`, not `re.search(...)`. A check that raises is
-undecided too. `never` and `at_most` are critical by default and the others are not; pass
-`critical=True` or `critical=False` to change that.
+undecided, so write `bool(re.search(...))`, not `re.search(...)`. A check that raises or
+returns any other type is undecided too. This also applies to saved state and judge
+verdicts: strings such as `"false"` cannot pass. `never` and `at_most` are critical by
+default and the others are not; pass `critical=True` or `critical=False` to change that.
 
 Adapters receive independent copies of the tasks, and the runner snapshots each returned
 episode. Duplicate or unrequested episodes raise an error. Missing episodes and adapter
@@ -239,7 +240,8 @@ metric where smaller is better. The frontier uses point estimates, so read the i
 before trusting the order of harnesses whose intervals overlap. When the harnesses are
 close variants of one design, pass `zero=False`: each axis then starts just below the
 data instead of at zero. A harness that lacks one of the two metrics is left out and named
-under the title.
+under the title. If either axis is a cost metric, any harness with `unknown_cost > 0`
+is also omitted. Its measured-cost mean remains available in the summary.
 
 ## Where each harness fails
 
@@ -270,6 +272,8 @@ the same number of trials per task, without duplicate task/trial pairs. It pairs
 harnesses task by task and gives every compared metric a paired 95% interval of candidate
 minus base: success, cost per task, both latency percentiles, calls, tokens, the use
 case's metrics and its guardrails. Each resample draws the same tasks for both harnesses.
+Equal task counts alone do not prove that either input covers the intended task split;
+the caller must supply complete data. The saved-run CLI checks this against the manifest.
 
 The gates come first: a base that misses one is replaced by any candidate that clears
 them all. Between two harnesses that clear the gates, success and cost per task decide
@@ -277,28 +281,33 @@ whether the candidate is better, and guardrails limit how much other metrics may
 worse. A guardrail is written like a gate but on the difference, candidate minus base:
 `guardrails={"latency_p95": ("<=", 2.0)}` lets p95 latency rise by at most 2 seconds, and
 `{"names id": (">=", -0.1)}` lets a higher-is-better metric drop by at most 0.1. Put an
-absolute limit, such as a latency ceiling, in the gates. The rule decides:
+absolute limit, such as a maximum latency, in the gates. The rule decides:
 
 1. **reject** if the candidate misses a gate or has more critical violations;
 2. **adopt** if the base misses a gate the candidate clears;
 3. **reject** if the success interval lies below `-margin`, or a guardrail's interval lies
    entirely past its limit;
-4. **adopt** if the success interval lies above 0, or if its lower bound is at least
-   `-margin` and the cost interval lies below 0, and every guardrail's interval stays
-   within its limit;
+4. **adopt** if the success interval lies above 0, or if it has nonzero width, its lower
+   bound is at least `-margin`, and the cost interval lies below 0. Every guardrail's
+   interval must stay within its limit;
 5. otherwise **inconclusive**: keep the base, and add tasks or runs.
 
 Steps 1 and 2 read point estimates: a gate ignores the interval. Steps 3 and 4 need at
-least six tasks. With fewer, differences that all point the same way still cannot reach
-95% (a sign test on five tasks gives p = 0.0625), so the result is inconclusive.
+least six tasks; with fewer, the result is inconclusive. Six is a minimum policy,
+not a guarantee that the bootstrap interval has 95% coverage.
 
 ![The adoption rule as six questions asked in order, each with a reject or adopt exit and inconclusive at the end, beside a number line showing how the success interval is read](docs/adoption-rule.svg)
 
 A cost gate fails while any run's cost is unknown, and a gate on a metric that could not
 be computed fails too. A cheaper-candidate decision requires complete costs for both
 harnesses, and a guardrail on a metric that could not be compared keeps the base.
-`margin` must be finite and nonnegative; zero allows an equally successful, cheaper
-candidate. `Comparison.deltas` holds every compared metric's difference and interval, and
+`margin` must be finite and nonnegative; zero allows no success loss. A zero-width
+success interval cannot justify cost-only adoption; widths up to `1e-15` count as zero
+to allow for floating-point roundoff. Identical observed task success rates
+produce `[0, 0]`, but that result does not bound the loss on new tasks. The comparison
+keeps the interval as a descriptive result and returns inconclusive unless an earlier
+rule decides. This check does not validate bootstrap coverage for other cases.
+`Comparison.deltas` holds every compared metric's difference and interval, and
 `decide(usecase, base_summary, candidate_summary, deltas)` applies the rule to them.
 
 ## From saved runs
@@ -315,9 +324,12 @@ harness-evals failures runs/evaluation/episodes.jsonl --usecase my_usecase:USECA
 
 `compare` requires the manifest beside each episodes file. It checks the manifests
 against each other and against the current use case before grading; the other commands
-check manifests when present. Harness names must be unique across the files you pass: to
-compare two versions of one harness, run them under two names, such as `main` and
-`candidate`.
+check manifests when present. For each harness present in a file with a manifest, every
+task in the declared split must have exactly one episode for every trial from 0 to
+`trials - 1`. Missing, duplicate or extra records and invalid trial numbers are errors.
+A file may contain only some harnesses from a run, provided each is complete. Harness
+names must be unique across the files you pass: to compare two versions of one harness,
+run them under two names, such as `main` and `candidate`.
 
 ## What it guards against
 
@@ -347,8 +359,10 @@ compare two versions of one harness, run them under two names, such as `main` an
   their difference excluded zero in about one evaluation in six instead of one in twenty,
   and came close to 5% only at about 40 tasks. The adoption rule therefore decides nothing
   on an interval from fewer than six tasks; treat a decision on 10 to 20 tasks as weak.
-- When every run of every task passes, the interval collapses to a point. Zero failures
-  in n runs still allows a failure rate up to about 3/n at 95% confidence.
+- Equal observed task success rates produce a zero-width paired interval, including
+  when both harnesses pass every run. Repeating those tasks does not establish the
+  success loss on new task types. The rule blocks cost-only adoption from that interval;
+  it does not replace it with a general non-inferiority confidence bound.
 - The library trusts the episodes it is given. Build them from records the harness
   cannot edit: the environment's database, a service log, the provider's usage report.
 
