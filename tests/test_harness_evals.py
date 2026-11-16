@@ -18,6 +18,7 @@ from harness_evals import (
     comparable,
     compare,
     did,
+    digest,
     ended,
     fingerprint,
     gate_failures,
@@ -33,6 +34,7 @@ from harness_evals import (
     run,
     save,
     says,
+    sign_test,
     state,
     summarize,
 )
@@ -1173,3 +1175,116 @@ def test_cost_frontiers_omit_partial_costs_and_name_the_omission(x, y):
         pareto({"partial": sums["partial"]}, x, y)
     with pytest.raises(ValueError, match="no harness has both"):
         frontier_svg({"partial": sums["partial"]}, x, y)
+
+
+# -- one step of an improvement loop --------------------------------------------------------
+
+
+def _far_from_the_bar():
+    """A base at 0.2 and a candidate at 0.8, with a bar of 0.9 that both miss."""
+    base = {f"t{i}": [i < 2] * 5 for i in range(10)}
+    cand = {f"t{i}": [i < 8] * 5 for i in range(10)}
+    uc, gb = grades_for(base, "base")
+    _, gc = grades_for(cand, "cand")
+    uc.gates = {"pass^k": (">=", 0.9)}
+    return uc, gb, gc
+
+
+def test_a_release_rejects_a_better_candidate_that_is_still_below_the_bar():
+    c = compare(*_far_from_the_bar())
+    assert c.ci[0] > 0 and c.decision == "reject"
+
+
+def test_a_step_adopts_a_better_candidate_that_is_still_below_the_bar():
+    c = compare(*_far_from_the_bar(), step=True)
+    assert c.decision == "adopt"
+    assert c.reasons[0].startswith("success is higher")
+    assert c.reasons[1].startswith("still below the bar: pass^k")
+
+
+def test_a_step_still_rejects_a_candidate_that_misses_a_bar_the_base_clears():
+    uc, gb, gc = _far_from_the_bar()
+    uc.gates["latency_p95"] = ("<=", 2.0)
+    for g in gc:
+        g.episode.latency_s = 3.0  # more successful, but now too slow
+    c = compare(uc, gb, gc, step=True)
+    assert c.decision == "reject" and c.reasons == ["latency_p95 = 3, needs <= 2"]
+
+
+def test_a_step_does_not_adopt_noise_below_the_bar():
+    base = {f"t{i}": [True, False] * 3 for i in range(10)}
+    cand = {f"t{i}": [i % 2 == 0, True, i % 2 == 0, False, True, False] for i in range(10)}
+    uc, gb = grades_for(base, "base")
+    _, gc = grades_for(cand, "cand")
+    uc.gates = {"pass^k": (">=", 0.9)}
+    assert compare(uc, gb, gc, step=True).decision == "inconclusive"
+
+
+def test_a_higher_level_widens_the_interval_and_can_withhold_an_adoption():
+    # The candidate is better on 7 of 12 tasks and worse on none.
+    base = {f"t{i}": [False] * 4 for i in range(12)}
+    cand = {f"t{i}": [i < 7] * 4 for i in range(12)}
+    uc, gb = grades_for(base, "base")
+    _, gc = grades_for(cand, "cand")
+    usual, strict = compare(uc, gb, gc), compare(uc, gb, gc, level=0.9999)
+    assert usual.decision == "adopt" and strict.decision == "inconclusive"
+    assert strict.ci[0] <= usual.ci[0] and strict.ci[1] >= usual.ci[1] and strict.level == 0.9999
+    with pytest.raises(ValueError):
+        compare(uc, gb, gc, level=1.0)
+
+
+def test_digest_names_the_failed_checks_and_shows_a_failing_run():
+    uc = UseCase(
+        "desk",
+        [
+            Task(
+                "late", "ana: refund order A2", (never("refund"), says("30 days")), tags=("refund",)
+            ),
+            Task("ok", "ana: hello", (says("hello"),)),
+        ],
+    )
+    eps = [
+        Episode("late", "h", 0, reply="Refunded.", actions=[REFUND], extra={"kind": "refund"}),
+        Episode("late", "h", 1, reply="Outside the 30 days."),
+        Episode("ok", "h", 0, reply="hello"),
+        Episode("ok", "h", 1, reply="hello"),
+    ]
+    text = digest(uc, uc.grade(eps))
+    assert text.startswith("# desk, h: 1 of 2 tasks pass every run (success 0.75)")
+    assert "## late: 1 of 2 runs passed" in text and "> ana: refund order A2" in text
+    assert "- `never refund()` in 1 of 2 runs" in text
+    assert 'refund({"order": "A1", "cents": 4800})' in text and '"kind": "refund"' in text
+    assert "Outside the 30 days" not in text  # the passing run is not a sample
+    assert text.rstrip().endswith("## Passing every run\nok")
+    with pytest.raises(ValueError):
+        digest(uc, uc.grade([*eps, Episode("ok", "other", 0, reply="hello")]))
+
+
+def test_a_step_is_not_kept_for_lower_cost_alone():
+    # Equal success on average (half the tasks a little better, half a little worse), and
+    # every run of the candidate costs a little less.
+    base = {f"t{i}": [True, True, False, False] for i in range(12)}
+    cand = {f"t{i}": [True, i % 2 == 0, i % 2 == 0, False] for i in range(12)}
+    uc, gb = grades_for(base, "base", cost=0.0010)
+    _, gc = grades_for(cand, "cand", cost=0.0009)
+    uc.margin = 0.2
+    release, step = compare(uc, gb, gc), compare(uc, gb, gc, step=True)
+    assert release.ci[0] < 0 < release.ci[1] and release.deltas["cost_per_task"][1][1] < 0
+    assert release.decision == "adopt" and "cheaper per task" in release.reasons[0]
+    assert step.decision == "inconclusive"
+
+
+def test_higher_success_on_four_tasks_is_not_enough_to_adopt():
+    # Two runs of one harness can differ like this: 4 of 36 tasks pass one more run.
+    base = {f"t{i}": [True, False, False] for i in range(36)}
+    again = {f"t{i}": [True, i < 4, False] for i in range(36)}
+    uc, gb = grades_for(base, "base")
+    _, ga = grades_for(again, "again")
+    c = compare(uc, gb, ga)
+    assert c.ci[0] > 0 and (len(c.better), len(c.worse)) == (4, 0)
+    assert c.decision == "inconclusive" and "sign test p = 0.125" in c.reasons[0]
+    # Six tasks that all improve can decide, and so can twelve against one.
+    six = {f"t{i}": [True, i < 6, False] for i in range(36)}
+    assert compare(uc, gb, grades_for(six, "six")[1]).decision == "adopt"
+    assert sign_test(4, 0) == 0.125 and sign_test(6, 0) == 0.03125 and sign_test(0, 0) == 1.0
+    assert round(sign_test(9, 2), 4) == 0.0654 and round(sign_test(12, 1), 4) == 0.0034

@@ -7,7 +7,7 @@ import statistics
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from math import isclose, isfinite
+from math import comb, isclose, isfinite
 from typing import Any
 
 from harness_evals.core import Grade
@@ -30,18 +30,31 @@ COMPARED = ("cost_per_task", "latency_p50", "latency_p95", "calls_per_task", "to
 MIN_TASKS = 6
 
 
+def sign_test(better: int, worse: int) -> float:
+    """The two-sided p-value of a sign test over the tasks whose pass rate differs: how
+    often chance alone splits them at least this unevenly. Tasks with no difference say
+    nothing, so four better and none worse gives 0.125 however many tasks there are."""
+    n, k = better + worse, min(better, worse)
+    return 1.0 if n == 0 else min(1.0, 2 * sum(comb(n, i) for i in range(k + 1)) / 2**n)
+
+
 def gate_failures(summary: dict[str, Any], gates: dict[str, tuple[str, float]]) -> list[str]:
     """The absolute bars a harness misses. A metric that cannot be computed misses its
     bar, and so does a cost bar while any run's cost is unknown."""
-    out = []
+    return list(_missed(summary, gates).values())
+
+
+def _missed(summary: dict[str, Any], gates: dict[str, tuple[str, float]]) -> dict[str, str]:
+    """Each missed bar's metric, with the reason."""
+    out = {}
     for metric, (op, limit) in gates.items():
         v = summary.get(metric)
         if metric.startswith("cost") and summary.get("unknown_cost"):
-            out.append(f"{metric}: cost unknown for {summary['unknown_cost']} runs")
+            out[metric] = f"{metric}: cost unknown for {summary['unknown_cost']} runs"
         elif v is None:
-            out.append(f"{metric}: not measured")
+            out[metric] = f"{metric}: not measured"
         elif not OPS[op](v, limit):
-            out.append(f"{metric} = {v:.4g}, needs {op} {limit:g}")
+            out[metric] = f"{metric} = {v:.4g}, needs {op} {limit:g}"
     return out
 
 
@@ -60,6 +73,7 @@ class Comparison:
     # Candidate minus base for every compared metric, with a paired interval; None when a
     # metric is unknown for either harness.
     deltas: dict[str, Delta | None] = field(default_factory=dict)
+    level: float = 0.95  # the confidence level of every interval above
 
 
 def compare(
@@ -68,10 +82,20 @@ def compare(
     candidate: Sequence[Grade],
     *,
     seed: int = 0,
+    step: bool = False,
+    level: float = 0.95,
 ) -> Comparison:
     """Pair the harnesses task by task: both ran the same tasks, so per-task differences
     cancel the variation that comes from task difficulty. Every compared metric gets a
-    paired interval from the same resampled tasks."""
+    paired interval from the same resampled tasks.
+
+    ``step=True`` decides one step of an improvement loop instead of a release: a bar
+    that the base misses too does not reject the candidate (see decide()). ``level`` is
+    the confidence level of the paired intervals. A loop that makes K decisions on the
+    same tasks can pass ``1 - 0.05 / K`` to keep the chance of one false adoption in the
+    whole campaign near 5% (a Bonferroni correction)."""
+    if not 0 < level < 1:
+        raise ValueError("level must be between 0 and 1")
     for grades in (base, candidate):
         if len({g.episode.harness for g in grades}) != 1:
             raise ValueError("each comparison input must contain exactly one harness")
@@ -89,21 +113,24 @@ def compare(
     sb = summarize(base, usecase.metrics, seed)
     sc = summarize(candidate, usecase.metrics, seed)
     tb, tc = by_task(base), by_task(candidate)
-    deltas: dict[str, Delta | None] = {"success": (statistics.fmean(d), bootstrap(d, seed=seed))}
+    ci = bootstrap(d, seed=seed, level=level)
+    deltas: dict[str, Delta | None] = {"success": (statistics.fmean(d), ci)}
     for name in dict.fromkeys([*COMPARED, *usecase.metrics, *usecase.guardrails]):
         if name in deltas:
             continue
         if name == "pass^k":  # like success, an average of per-task values: pair the tasks
             vb, vc = (per_task(gs, name, sb["trials"]) for gs in (base, candidate))
             dk = [vc[t] - vb[t] for t in shared]
-            deltas[name] = (statistics.fmean(dk), bootstrap(dk, seed=seed))
+            deltas[name] = (statistics.fmean(dk), bootstrap(dk, seed=seed, level=level))
             continue
         unknown = name.startswith("cost") and (sb["unknown_cost"] or sc["unknown_cost"])
         if unknown or sb[name] is None or sc[name] is None:
             deltas[name] = None
             continue
         metric = pooled(name, usecase.metrics)
-        ci = paired_interval([tb[t] for t in shared], [tc[t] for t in shared], metric, seed=seed)
+        ci = paired_interval(
+            [tb[t] for t in shared], [tc[t] for t in shared], metric, seed=seed, level=level
+        )
         deltas[name] = None if ci is None else (sc[name] - sb[name], ci)
     diff, ci = deltas["success"]
     c = Comparison(
@@ -116,8 +143,11 @@ def compare(
         worse=[t for t in shared if rc[t] < rb[t]],
         summaries={names[0]: sb, names[1]: sc},
         deltas=deltas,
+        level=level,
     )
-    c.decision, c.reasons = decide(usecase, sb, sc, deltas)
+    c.decision, c.reasons = decide(
+        usecase, sb, sc, deltas, step=step, changed=(len(c.better), len(c.worse)), level=level
+    )
     return c
 
 
@@ -126,6 +156,10 @@ def decide(
     sb: dict[str, Any],
     sc: dict[str, Any],
     deltas: Mapping[str, Delta | None],
+    *,
+    step: bool = False,
+    changed: tuple[int, int] | None = None,
+    level: float = 0.95,
 ) -> tuple[str, list[str]]:
     """The adoption rule. Without clear evidence for the candidate, keep the base.
 
@@ -133,16 +167,32 @@ def decide(
     them all. Between two harnesses that clear the gates, success and cost per task are
     what a candidate may win on, and ``guardrails`` limit how much other metrics may get
     worse. ``deltas`` holds candidate minus base with a paired interval for success, cost
-    per task and every guardrail; compare() computes it."""
+    per task and every guardrail; compare() computes it.
+
+    ``step=True`` is the rule for one step of an improvement loop. A release asks whether
+    the candidate may serve users, so a candidate below the bar is rejected. A step asks
+    whether the candidate is a better base for the next change, so a bar that the base
+    misses too does not reject it: the intervals decide. A bar the base clears still
+    rejects a candidate that misses it. A step is kept for higher success only, never for
+    lower cost alone: two runs of one harness differ in tokens by sampling, and over a
+    few dozen tasks that difference can look like a saving.
+
+    ``changed`` is how many tasks the candidate passes more often and less often than the
+    base. When given, higher success also has to pass a sign test over those tasks at
+    ``level``: an interval over a few dozen tasks can sit above zero when only four of
+    them changed, and two runs of one harness can differ on four tasks."""
     if not isfinite(usecase.margin) or usecase.margin < 0:
         raise ValueError("margin must be finite and nonnegative")
     check_guardrails(usecase.guardrails, usecase.metrics)
-    if missed := gate_failures(sc, usecase.gates):
-        return "reject", missed
+    missed, base_missed = _missed(sc, usecase.gates), _missed(sb, usecase.gates)
+    if new := [why for m, why in missed.items() if not (step and m in base_missed)]:
+        return "reject", new
     if sc["violations"] > sb["violations"]:
         return "reject", [f"more critical violations: {sc['violations']} vs {sb['violations']}"]
-    if base_missed := gate_failures(sb, usecase.gates):
-        return "adopt", ["the base misses the bar: " + "; ".join(base_missed)]
+    if base_missed and not missed:
+        return "adopt", ["the base misses the bar: " + "; ".join(base_missed.values())]
+    # Only in a step: both miss the same bars, and the candidate has to be closer.
+    below = ["still below the bar: " + "; ".join(missed.values())] if missed else []
     if sb.get("tasks", MIN_TASKS) < MIN_TASKS:
         return "inconclusive", [
             f"{sb['tasks']} tasks are too few for an interval to decide; keep the base and"
@@ -169,12 +219,19 @@ def decide(
     known = not (sb.get("unknown_cost") or sc.get("unknown_cost"))
     if lo > 0:
         win = f"success is higher: {lo:+.3f} to {hi:+.3f}"
+        if changed is not None and (p := sign_test(*changed)) > 1 - level:
+            return "inconclusive", [
+                f"success is higher on average ({lo:+.3f} to {hi:+.3f}), but it changed on"
+                f" too few tasks to rule out chance: {changed[0]} better, {changed[1]} worse"
+                f" (sign test p = {p:.3f}); keep the base",
+                *unsure,
+            ]
     elif isclose(lo, hi, rel_tol=0.0, abs_tol=1e-15):
         return "inconclusive", [
             "a zero-width success interval does not establish the allowed loss; keep the base",
             *unsure,
         ]
-    elif lo >= -m and known and cost is not None and cost[1][1] < 0:
+    elif not step and lo >= -m and known and cost is not None and cost[1][1] < 0:
         clo, chi = cost[1]
         win = (
             f"no worse than -{m:g} ({lo:+.3f} to {hi:+.3f}) and cheaper per task"
@@ -188,7 +245,7 @@ def decide(
         ]
     if unsure:
         return "inconclusive", [f"{win}, but a guardrail may break; keep the base", *unsure]
-    return "adopt", [win]
+    return "adopt", [win, *below]
 
 
 def _num(name: str, v: float) -> str:

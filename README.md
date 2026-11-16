@@ -27,9 +27,9 @@ and where each one fails.
 ## Install
 
 ```bash
-uv add "harness-evals @ git+https://github.com/slavadubrov/harness-evals@v0.5.1"
+uv add "harness-evals @ git+https://github.com/slavadubrov/harness-evals@v0.6.0"
 # or
-pip install "git+https://github.com/slavadubrov/harness-evals@v0.5.1"
+pip install "git+https://github.com/slavadubrov/harness-evals@v0.6.0"
 ```
 
 ## Quickstart
@@ -38,7 +38,7 @@ The example runs offline in a second. It is in the repository, not in the instal
 package:
 
 ```bash
-git clone --depth 1 --branch v0.5.1 https://github.com/slavadubrov/harness-evals
+git clone --depth 1 --branch v0.6.0 https://github.com/slavadubrov/harness-evals
 cd harness-evals
 uv run python examples/refund_desk.py out
 ```
@@ -76,6 +76,7 @@ harness.
 | `by_harness`, `table`, `comparison` | The grades of each harness, and Markdown for summaries and for a comparison | `metrics.py`, `report.py` |
 | `pareto`, `frontier_svg` | The harnesses no other beats on two metrics, and a plot of all of them with intervals on both axes | `metrics.py`, `report.py` |
 | `failure_map_svg` | Where each harness fails: tasks in rows, kinds of check or runs in columns | `report.py` |
+| `digest` | The same failures as text: each failing task with its input, failed checks and a sample run | `report.py` |
 | `agreement` | How often a grader agrees with labels a person wrote | `calibrate.py` |
 
 ![C4 component view of the harness_evals package: the public API and CLI on top, runner, compare, report and calibrate in the middle, usecase and metrics below, core at the base; your script, your adapters and the runs folder around it](docs/components.svg)
@@ -265,6 +266,27 @@ Pass `group=` to name the columns another way; it receives a check's name. Use
 `by="runs"` for the run grid. `failures(grades)` returns the same counts per check name as
 a dictionary.
 
+`digest(USECASE, by["workflow"])` writes the failures of one harness as Markdown: every
+failing task with its input, the failed checks and how many runs failed each, and one
+failing run with its reply, the recorded actions, the error and `Episode.extra`. Put a
+trace in `extra` and it shows up there. It is what a person, or a program that proposes
+the next change, reads before editing the harness:
+
+```text
+# refund-desk, agent: 3 of 5 tasks pass every run (success 0.90)
+
+## refund-late: 8 of 10 runs passed
+Input:
+> ana: refund order A2
+Failed checks:
+- `never refund()` in 2 of 10 runs
+- `says ('30 days',)` in 2 of 10 runs
+
+Run 2 ended `completed`. Reply:
+> Order A2 has been refunded.
+Recorded actions: refund({"order": "A2", "cents": 6500})
+```
+
 ## The adoption rule
 
 `compare(usecase, base, candidate)` requires one harness per input, the same tasks and
@@ -287,14 +309,21 @@ absolute limit, such as a maximum latency, in the gates. The rule decides:
 2. **adopt** if the base misses a gate the candidate clears;
 3. **reject** if the success interval lies below `-margin`, or a guardrail's interval lies
    entirely past its limit;
-4. **adopt** if the success interval lies above 0, or if it has nonzero width, its lower
-   bound is at least `-margin`, and the cost interval lies below 0. Every guardrail's
-   interval must stay within its limit;
+4. **adopt** if the success interval lies above 0 and a sign test agrees, or if the
+   interval has nonzero width, its lower bound is at least `-margin`, and the cost
+   interval lies below 0. Every guardrail's interval must stay within its limit;
 5. otherwise **inconclusive**: keep the base, and add tasks or runs.
 
 Steps 1 and 2 read point estimates: a gate ignores the interval. Steps 3 and 4 need at
 least six tasks; with fewer, the result is inconclusive. Six is a minimum policy,
 not a guarantee that the bootstrap interval has 95% coverage.
+
+The sign test in step 4 counts tasks, not runs. Among the tasks whose pass rate differs
+between the two harnesses, the candidate has to win clearly more often than it loses:
+`sign_test(better, worse)` must be at most `1 - level`. An interval over a few dozen
+tasks can sit above zero when only four of them changed, and two runs of one harness can
+differ on four tasks. Four better and none worse gives p = 0.125 and keeps the base; six
+and none, or twelve against one, can decide.
 
 ![The adoption rule as six questions asked in order, each with a reject or adopt exit and inconclusive at the end, beside a number line showing how the success interval is read](docs/adoption-rule.svg)
 
@@ -310,6 +339,34 @@ rule decides. This check does not validate bootstrap coverage for other cases.
 `Comparison.deltas` holds every compared metric's difference and interval, and
 `decide(usecase, base_summary, candidate_summary, deltas)` applies the rule to them.
 
+### One step of an improvement loop
+
+The rule above decides a release: may the candidate serve users? A loop that improves a
+harness change by change asks something else at each step: is the candidate a better base
+for the next change? Far below the bar, the release rule rejects every candidate, because
+each one still misses the bar, and the loop never moves.
+
+`compare(usecase, base, candidate, step=True)` decides a step. A gate that the base
+misses too does not reject the candidate: the intervals of rules 3 to 5 decide whether it
+is better, and the reasons say that it is still below the bar. A gate that the base
+clears still rejects a candidate that misses it, and so does a new critical violation.
+Decide the release with the default rule when the loop is done, on tasks it has not
+used.
+
+A step is kept for higher success only. The cheaper-at-no-loss route of rule 4 is off:
+two runs of one harness differ in tokens by sampling, and over a few dozen tasks that
+difference can pass for a saving. Check your own setup the same way: run the base twice
+with new samples and give the pair to the rule. The answer should be inconclusive.
+
+`level` sets the confidence level of the paired intervals, 0.95 by default. A loop that
+makes K decisions on the same validation tasks can pass `level=1 - 0.05 / K` (a
+Bonferroni correction), so the chance of one false adoption in the whole run stays near
+5%; the price is that a real but small improvement is more often inconclusive.
+
+```python
+c = compare(USECASE, base, candidate, step=True, level=1 - 0.05 / 8)
+```
+
 ## From saved runs
 
 Pass `out="runs/evaluation"` to `run` to save `episodes.jsonl` and `manifest.json`. With
@@ -320,7 +377,10 @@ harness-evals summarize runs/evaluation/episodes.jsonl --usecase my_usecase:USEC
 harness-evals compare runs/evaluation/episodes.jsonl --usecase my_usecase:USECASE --base agent --candidate workflow
 harness-evals frontier runs/evaluation/episodes.jsonl --usecase my_usecase:USECASE --x latency_p95 > frontier.svg
 harness-evals failures runs/evaluation/episodes.jsonl --usecase my_usecase:USECASE > failures.svg
+harness-evals digest runs/evaluation/episodes.jsonl --usecase my_usecase:USECASE > failures.md
 ```
+
+`compare` takes `--step` and `--level 0.99` for a step of an improvement loop.
 
 `compare` requires the manifest beside each episodes file. It checks the manifests
 against each other and against the current use case before grading; the other commands
