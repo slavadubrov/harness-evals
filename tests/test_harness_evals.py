@@ -1211,6 +1211,35 @@ def test_a_step_still_rejects_a_candidate_that_misses_a_bar_the_base_clears():
     assert c.decision == "reject" and c.reasons == ["latency_p95 = 3, needs <= 2"]
 
 
+def test_a_step_does_not_adopt_a_candidate_only_for_clearing_a_bar_the_base_misses():
+    def too_slow_base(base, cand, cost=0.001):
+        uc, gb = grades_for(base, "base")
+        _, gc = grades_for(cand, "cand", cost=cost)
+        for g in gb:
+            g.episode.latency_s = 3.0
+        uc.gates = {"latency_p95": ("<=", 2.0)}
+        return uc, gb, gc
+
+    # Fast enough now, but success falls from 1.0 to 0.4.
+    worse = too_slow_base(
+        {f"t{i}": [True] * 5 for i in range(10)}, {f"t{i}": [i >= 6] * 5 for i in range(10)}
+    )
+    assert compare(*worse).decision == "adopt"  # a release replaces a base below the bar
+    c = compare(*worse, step=True)
+    assert c.ci[1] < 0 and c.decision == "reject" and c.reasons[0].startswith("success is lower")
+
+    # Fast enough and more successful, but ten times the cost past a guardrail.
+    uc, gb, gc = too_slow_base(
+        {f"t{i}": [i < 4] * 5 for i in range(10)}, {f"t{i}": [True] * 5 for i in range(10)}, 0.01
+    )
+    ok = compare(uc, gb, gc, step=True)
+    assert ok.decision == "adopt" and len(ok.reasons) == 1
+    assert ok.reasons[0].startswith("success is higher")
+    uc.guardrails = {"cost_per_task": ("<=", 0.001)}
+    c = compare(uc, gb, gc, step=True)
+    assert c.decision == "reject" and c.reasons[0].startswith("cost_per_task changes by")
+
+
 def test_a_step_does_not_adopt_noise_below_the_bar():
     base = {f"t{i}": [True, False] * 3 for i in range(10)}
     cand = {f"t{i}": [i % 2 == 0, True, i % 2 == 0, False, True, False] for i in range(10)}
