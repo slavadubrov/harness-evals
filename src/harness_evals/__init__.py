@@ -1,9 +1,15 @@
 """Evaluate an agent harness or workflow with the model held fixed."""
 
-__version__ = "0.5.1"
+__version__ = "0.6.0"
 
 from harness_evals.calibrate import agreement  # noqa: E402
-from harness_evals.compare import Comparison, compare, decide, gate_failures  # noqa: E402
+from harness_evals.compare import (  # noqa: E402
+    Comparison,
+    compare,
+    decide,
+    gate_failures,
+    sign_test,
+)
 from harness_evals.core import (  # noqa: E402
     Action,
     Check,
@@ -31,6 +37,7 @@ from harness_evals.metrics import (  # noqa: E402
 )
 from harness_evals.report import (  # noqa: E402
     comparison,
+    digest,
     failure_map_svg,
     frontier_svg,
     table,
@@ -54,6 +61,7 @@ __all__ = [
     "comparison",
     "decide",
     "did",
+    "digest",
     "ended",
     "failure_map_svg",
     "failures",
@@ -72,6 +80,7 @@ __all__ = [
     "run",
     "save",
     "says",
+    "sign_test",
     "state",
     "summarize",
     "table",

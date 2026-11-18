@@ -80,7 +80,7 @@ class Task:
     id: str
     input: Any
     checks: tuple[Check, ...]
-    split: str = "dev"  # "dev" while you build; "holdout" only for the final decision
+    split: str = "dev"  # "dev" to read and fix; "val" to choose a candidate; "test" once
     tags: tuple[str, ...] = ()
 
 

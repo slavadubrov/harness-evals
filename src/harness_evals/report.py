@@ -3,6 +3,7 @@ two metrics, and a map of where each harness fails."""
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from html import escape
 from math import ceil, floor, hypot, isfinite, log10
@@ -70,7 +71,8 @@ def comparison(c: Comparison) -> str:
     lo, hi = c.ci
     lines = [
         f"**{c.candidate}** against **{c.base}** on {c.tasks} tasks: "
-        f"success {c.diff:+.3f} ({lo:+.3f} to {hi:+.3f}).",
+        f"success {c.diff:+.3f} ({lo:+.3f} to {hi:+.3f})."
+        + ("" if c.level == 0.95 else f" Intervals are at {c.level:.2%}."),
         f"Better on {_tasks(len(c.better))}, worse on {_tasks(len(c.worse))}.",
     ]
     others = []
@@ -95,6 +97,63 @@ def comparison(c: Comparison) -> str:
 
 def _tasks(n: int) -> str:
     return f"{n} task" + "s" * (n != 1)
+
+
+def digest(
+    usecase: UseCase, grades: Sequence[Grade], *, samples: int = 1, limit: int = 1500
+) -> str:
+    """What one harness failed, task by task, in Markdown: the input, the failed checks
+    with how many runs failed each, and ``samples`` failing runs with the reply, the
+    recorded actions, the error and ``Episode.extra`` (put a trace there). It is what a
+    person or a program reads before changing the harness. ``limit`` cuts long fields."""
+    if len({g.episode.harness for g in grades}) > 1:
+        raise ValueError("digest takes one harness; split them with by_harness()")
+    tasks = {t.id: t for t in usecase.tasks}
+    runs: dict[str, list[Grade]] = {}
+    for g in grades:
+        runs.setdefault(g.episode.task_id, []).append(g)
+    failing = {t: gs for t, gs in runs.items() if not all(g.passed for g in gs)}
+    success = sum(sum(g.passed for g in gs) / len(gs) for gs in runs.values()) / len(runs)
+
+    def cut(text: Any) -> str:
+        text = str(text)
+        return text if len(text) <= limit else text[:limit] + f" … ({len(text) - limit} more)"
+
+    def quote(text: Any) -> str:
+        return "\n".join("> " + line for line in cut(text).splitlines() or [""])
+
+    name = ", ".join(filter(None, [usecase.name, grades[0].episode.harness if grades else ""]))
+    out = [
+        f"# {name}: {len(runs) - len(failing)} of {len(runs)} tasks pass every run"
+        f" (success {success:.2f})",
+    ]
+    for task_id, gs in failing.items():
+        t, n = tasks[task_id], len(gs)
+        counts: dict[str, int] = {}
+        for g in gs:
+            for name in g.failed + [f"undecided: {u}" for u in g.unknown]:
+                counts[name] = counts.get(name, 0) + 1
+        out += ["", f"## {task_id}: {sum(g.passed for g in gs)} of {n} runs passed"]
+        if t.tags:
+            out.append("Tags: " + ", ".join(t.tags))
+        out += ["Input:", quote(t.input), "Failed checks:"]
+        out += [f"- `{name}` in {c} of {n} runs" for name, c in counts.items()]
+        for g in [g for g in gs if not g.passed][:samples]:
+            e = g.episode
+            out += ["", f"Run {e.trial} ended `{e.status}`. Reply:", quote(e.reply or "(no reply)")]
+            if e.actions:
+                acts = "; ".join(f"{a.name}({json.dumps(a.args, default=str)})" for a in e.actions)
+                out.append("Recorded actions: " + cut(acts))
+            else:
+                out.append("Recorded actions: none")
+            if e.error:
+                out.append("Error: " + cut(e.error))
+            if e.extra:
+                out.append("Trace: " + cut(json.dumps(e.extra, ensure_ascii=False, default=str)))
+    passing = [t for t in runs if t not in failing]
+    if passing:
+        out += ["", "## Passing every run", ", ".join(passing)]
+    return "\n".join(out) + "\n"
 
 
 # Dark colours for a reader whose system prefers them; the attributes hold the light ones.

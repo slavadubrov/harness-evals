@@ -1,4 +1,7 @@
-"""harness-evals summarize|compare|frontier|failures --usecase module:USECASE episodes.jsonl ..."""
+"""harness-evals <command> --usecase module:USECASE episodes.jsonl ...
+
+Commands: summarize, compare, frontier, failures, digest.
+"""
 
 from __future__ import annotations
 
@@ -13,7 +16,7 @@ from pathlib import Path
 from harness_evals.compare import compare
 from harness_evals.core import Episode, Task
 from harness_evals.metrics import summarize
-from harness_evals.report import comparison, failure_map_svg, frontier_svg, table
+from harness_evals.report import comparison, digest, failure_map_svg, frontier_svg, table
 from harness_evals.runner import comparable, fingerprint, load
 from harness_evals.usecase import UseCase
 
@@ -62,7 +65,7 @@ def _check_coverage(episodes: list[Episode], tasks: list[Task], trials: int) -> 
 
 def _main(argv: list[str] | None) -> None:
     p = argparse.ArgumentParser(prog="harness-evals")
-    p.add_argument("command", choices=["summarize", "compare", "frontier", "failures"])
+    p.add_argument("command", choices=["summarize", "compare", "frontier", "failures", "digest"])
     p.add_argument("episodes", nargs="+", type=Path, help="episodes.jsonl files")
     p.add_argument("--usecase", required=True, help="module:attribute of a UseCase")
     p.add_argument("--base", help="harness name to compare against")
@@ -76,6 +79,8 @@ def _main(argv: list[str] | None) -> None:
         help="frontier: a custom metric where less is better",
     )
     p.add_argument("--by", choices=["checks", "runs"], default="checks", help="failures: columns")
+    p.add_argument("--step", action="store_true", help="compare: decide a loop step, not a release")
+    p.add_argument("--level", type=float, default=0.95, help="compare: interval confidence level")
     a = p.parse_args(argv)
 
     uc = _usecase(a.usecase)
@@ -119,7 +124,11 @@ def _main(argv: list[str] | None) -> None:
     if a.command == "compare":
         if not (a.base in grades and a.candidate in grades):
             raise SystemExit(f"--base and --candidate must be among: {', '.join(grades)}")
-        print(comparison(compare(uc, grades[a.base], grades[a.candidate])))
+        c = compare(uc, grades[a.base], grades[a.candidate], step=a.step, level=a.level)
+        print(comparison(c))
+        return
+    if a.command == "digest":  # Markdown: what each harness failed, task by task
+        print("\n".join(digest(uc, gs) for gs in grades.values()), end="")
         return
     if a.command == "failures":  # an SVG on stdout: harness-evals failures ... > failures.svg
         print(failure_map_svg(uc, grades, by=a.by), end="")
