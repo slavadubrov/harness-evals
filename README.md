@@ -319,8 +319,8 @@ least six tasks; with fewer, the result is inconclusive. Six is a minimum policy
 not a guarantee that the bootstrap interval has 95% coverage.
 
 The sign test in step 4 counts tasks, not runs. Among the tasks whose pass rate differs
-between the two harnesses, the candidate has to win clearly more often than it loses:
-`sign_test(better, worse)` must be at most `1 - level`. An interval over a few dozen
+between the two harnesses, the candidate must improve more tasks than it worsens.
+The two-sided `sign_test(better, worse)` must also be at most `1 - level`. An interval over a few dozen
 tasks can sit above zero when only four of them changed, and two runs of one harness can
 differ on four tasks. Four better and none worse gives p = 0.125 and keeps the base; six
 and none, or twelve against one, can decide.
@@ -337,7 +337,9 @@ produce `[0, 0]`, but that result does not bound the loss on new tasks. The comp
 keeps the interval as a descriptive result and returns inconclusive unless an earlier
 rule decides. This check does not validate bootstrap coverage for other cases.
 `Comparison.deltas` holds every compared metric's difference and interval, and
-`decide(usecase, base_summary, candidate_summary, deltas)` applies the rule to them.
+`decide(usecase, base_summary, candidate_summary, deltas, changed=(better, worse))`
+applies the rule to them. Pass the two counts to decide on a success gain. If they
+are missing, the evidence for that gain is inconclusive. `compare()` supplies both.
 
 ### One step of an improvement loop
 
@@ -351,7 +353,8 @@ misses decides nothing either way: a candidate that misses it too is not rejecte
 candidate that clears it is not adopted for that alone (rule 2 is off). The intervals of
 rules 3 to 5 decide whether it is better, and the reasons say when it is still below the
 bar. A gate that the base
-clears still rejects a candidate that misses it, and so does a new critical violation.
+clears still rejects a candidate that misses it, as does an increase in the number of
+runs with a critical violation.
 Decide the release with the default rule when the loop is done, on tasks it has not
 used.
 
@@ -360,10 +363,11 @@ two runs of one harness differ in tokens by sampling, and over a few dozen tasks
 difference can pass for a saving. Check your own setup the same way: run the base twice
 with new samples and give the pair to the rule. The answer should be inconclusive.
 
-`level` sets the confidence level of the paired intervals, 0.95 by default. A loop that
-makes K decisions on the same validation tasks can pass `level=1 - 0.05 / K` (a
-Bonferroni correction), so the chance of one false adoption in the whole run stays near
-5%; the price is that a real but small improvement is more often inconclusive.
+`level` sets the confidence level of the paired intervals, 0.95 by default. For K
+proposals, repeat the comparisons at `level=1 - 0.05 / K` to see which decisions still
+hold. If earlier validation results influenced later proposals, this stricter threshold
+does not establish a 5% error rate across the search. Assess the selected harness on
+separate test tasks.
 
 ```python
 c = compare(USECASE, base, candidate, step=True, level=1 - 0.05 / 8)

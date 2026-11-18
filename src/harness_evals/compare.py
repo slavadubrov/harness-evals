@@ -91,9 +91,9 @@ def compare(
 
     ``step=True`` decides one step of an improvement loop instead of a release: a bar
     that the base misses too does not reject the candidate (see decide()). ``level`` is
-    the confidence level of the paired intervals. A loop that makes K decisions on the
-    same tasks can pass ``1 - 0.05 / K`` to keep the chance of one false adoption in the
-    whole campaign near 5% (a Bonferroni correction)."""
+    the confidence level of the paired intervals. For K proposals, a stricter level of
+    ``1 - 0.05 / K`` shows which decisions still hold. With proposals chosen using earlier
+    validation results, this does not guarantee a 5% campaign error rate."""
     if not 0 < level < 1:
         raise ValueError("level must be between 0 and 1")
     for grades in (base, candidate):
@@ -179,9 +179,9 @@ def decide(
     few dozen tasks that difference can look like a saving.
 
     ``changed`` is how many tasks the candidate passes more often and less often than the
-    base. When given, higher success also has to pass a sign test over those tasks at
-    ``level``: an interval over a few dozen tasks can sit above zero when only four of
-    them changed, and two runs of one harness can differ on four tasks."""
+    base. To adopt for higher success, more tasks must improve than worsen and the
+    two-sided sign test must pass at ``level``. Without those counts the result for
+    higher success is inconclusive."""
     if not isfinite(usecase.margin) or usecase.margin < 0:
         raise ValueError("margin must be finite and nonnegative")
     check_guardrails(usecase.guardrails, usecase.metrics)
@@ -220,10 +220,14 @@ def decide(
     known = not (sb.get("unknown_cost") or sc.get("unknown_cost"))
     if lo > 0:
         win = f"success is higher: {lo:+.3f} to {hi:+.3f}"
-        if changed is not None and (p := sign_test(*changed)) > 1 - level:
+        if changed is None:
+            return "inconclusive", [f"{win}, but the paired task counts are missing", *unsure]
+        better, worse_count = changed
+        p = sign_test(better, worse_count)
+        if better <= worse_count or p > 1 - level:
             return "inconclusive", [
-                f"success is higher on average ({lo:+.3f} to {hi:+.3f}), but it changed on"
-                f" too few tasks to rule out chance: {changed[0]} better, {changed[1]} worse"
+                f"success is higher on average ({lo:+.3f} to {hi:+.3f}), but the task counts"
+                f" do not support the gain: {better} better, {worse_count} worse"
                 f" (sign test p = {p:.3f}); keep the base",
                 *unsure,
             ]
