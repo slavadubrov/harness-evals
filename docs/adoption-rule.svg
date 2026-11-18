@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="652" viewBox="0 0 960 652" role="img" aria-labelledby="title desc">
 <title id="title">The adoption rule</title>
-<desc id="desc">compare(usecase, base, candidate) asks six questions in order and the first yes decides. 1: the candidate misses a gate, reject. 2: it has more critical violations than the base, reject. 3: the base misses a gate, adopt. 4: the success interval lies entirely below minus margin, or a guardrail's interval lies entirely past its limit, reject. 5: the success interval lies entirely above 0 and every guardrail stays within its limit, adopt. 6: its success interval has nonzero width, its lower bound is at least minus margin, the cost interval lies below 0 and every guardrail holds, adopt. Steps 4 to 6 require at least six tasks. Otherwise inconclusive: keep the base and add tasks or runs. Equal observed task success rates cannot establish the allowed loss. A number line shows four example intervals and the refund-desk case, where the interval proves nothing but step 3 adopts the workflow because the agent misses the violations gate.</desc>
+<desc id="desc">compare(usecase, base, candidate) asks six questions in order and the first yes decides. 1: the candidate misses a gate, reject. 2: it has more critical violations than the base, reject. 3: the base misses a gate, adopt. 4: the success interval lies entirely below minus margin, or a guardrail's interval lies entirely past its limit, reject. 5: the success interval lies entirely above 0, the sign test favors the candidate and every guardrail stays within its limit, adopt. 6: its success interval has nonzero width, its lower bound is at least minus margin, the cost interval lies below 0 and every guardrail holds, adopt. Steps 4 to 6 require at least six tasks. Otherwise inconclusive: keep the base and add tasks or runs. Equal observed task success rates cannot establish the allowed loss. A number line shows four example intervals and the refund-desk case, where the interval proves nothing but step 3 adopts the workflow because the agent misses the violations gate.</desc>
 <style>
 :root {
   --bg: #f6f8fa;
@@ -216,7 +216,7 @@ text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', 
 <rect x="40" y="454" width="330" height="50" rx="10" class="panel sh"/>
 <circle cx="62" cy="479" r="11" class="k-slate"/><text x="62" y="483" text-anchor="middle" class="bold" style="font-size:11.5px; fill: var(--panel)">5</text>
 <text x="84" y="475" class="h3">Success interval entirely above 0?</text>
-<text x="84" y="492" class="s">and every guardrail stays within its limit</text>
+<text x="84" y="492" class="s">sign test favors candidate; all guardrails hold</text>
 <path d="M372 479.0 H406" class="s-green" fill="none" stroke-width="1.5" marker-end="url(#a-green)" stroke-linecap="round" stroke-linejoin="round"/>
 <text x="390" y="473" class="s" text-anchor="middle">yes</text>
 <rect x="412" y="466" width="76.6" height="26" rx="13" class="f-green"/><use href="#i-check" x="420" y="473" width="12" height="12" class="i-green"/><text x="437" y="483" class="b x-green bold" style="font-size:11px">ADOPT</text>
@@ -248,7 +248,7 @@ text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', 
 <text x="566" y="226" class="s halo-p"><tspan class="cap x-rose">REJECT</tspan><tspan class="s t2">  entirely below −margin</tspan></text>
 <line x1="610.0" y1="241.0" x2="699.6" y2="241.0" class="s-rose" stroke-width="6" stroke-linecap="round"/>
 <circle cx="654.8" cy="241.0" r="5" class="s-rose" stroke-width="2.5" style="fill: var(--panel)"/>
-<text x="566" y="290" class="s halo-p"><tspan class="cap x-green">ADOPT</tspan><tspan class="s t2">  entirely above 0</tspan></text>
+<text x="566" y="290" class="s halo-p"><tspan class="cap x-green">ADOPT</tspan><tspan class="s t2">  above 0; sign test and guardrails pass</tspan></text>
 <line x1="750.8" y1="305.0" x2="808.4" y2="305.0" class="s-green" stroke-width="6" stroke-linecap="round"/>
 <circle cx="779.6" cy="305.0" r="5" class="s-green" stroke-width="2.5" style="fill: var(--panel)"/>
 <text x="566" y="354" class="s halo-p"><tspan class="cap x-green">ADOPT</tspan><tspan class="s t2">  within margin, and cheaper</tspan></text>

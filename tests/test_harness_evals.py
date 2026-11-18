@@ -17,6 +17,7 @@ from harness_evals import (
     by_harness,
     comparable,
     compare,
+    decide,
     did,
     digest,
     ended,
@@ -813,8 +814,6 @@ def test_a_base_that_misses_a_gate_is_replaced_before_guardrails_apply():
 
 
 def test_decide_never_calls_a_candidate_cheaper_while_a_cost_is_unknown():
-    from harness_evals import decide
-
     uc, base = grades_for({"a": [True, True]}, "base", cost=0.01)
     _, cand = grades_for({"a": [True, True]}, "cand", cost=0.001)
     sb, sc = summarize(base), summarize(cand)
@@ -1317,3 +1316,22 @@ def test_higher_success_on_four_tasks_is_not_enough_to_adopt():
     assert compare(uc, gb, grades_for(six, "six")[1]).decision == "adopt"
     assert sign_test(4, 0) == 0.125 and sign_test(6, 0) == 0.03125 and sign_test(0, 0) == 1.0
     assert round(sign_test(9, 2), 4) == 0.0654 and round(sign_test(12, 1), 4) == 0.0034
+
+
+def test_sign_test_must_favor_the_candidate():
+    # Six large gains raise the mean, but eighteen tasks each lose one pass.
+    uc, base = grades_for({f"t{i}": [i < 18] + [False] * 19 for i in range(24)}, "base")
+    _, candidate = grades_for({f"t{i}": [i >= 18] * 20 for i in range(24)}, "candidate")
+    c = compare(uc, base, candidate, step=True)
+    assert c.ci[0] > 0 and sign_test(len(c.better), len(c.worse)) < 0.05
+    assert c.decision == "inconclusive" and "6 better, 18 worse" in c.reasons[0]
+
+
+@pytest.mark.parametrize("step", [False, True])
+def test_decide_requires_task_counts_to_adopt_for_higher_success(step):
+    uc = UseCase("u", [])
+    summary = {"tasks": 36, "violations": 0}
+    deltas = {"success": (0.04, (0.01, 0.07))}
+    assert decide(uc, summary, summary, deltas, step=step)[0] == "inconclusive"
+    assert decide(uc, summary, summary, deltas, step=step, changed=(4, 0))[0] == "inconclusive"
+    assert decide(uc, summary, summary, deltas, step=step, changed=(6, 0))[0] == "adopt"
