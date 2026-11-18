@@ -163,17 +163,18 @@ def decide(
 ) -> tuple[str, list[str]]:
     """The adoption rule. Without clear evidence for the candidate, keep the base.
 
-    The gates come first: a base that misses one is replaced by any candidate that clears
-    them all. Between two harnesses that clear the gates, success and cost per task are
-    what a candidate may win on, and ``guardrails`` limit how much other metrics may get
-    worse. ``deltas`` holds candidate minus base with a paired interval for success, cost
-    per task and every guardrail; compare() computes it.
+    The gates come first: in a release, a base that misses one is replaced by any
+    candidate that clears them all. Between two harnesses that clear the gates, success
+    and cost per task are what a candidate may win on, and ``guardrails`` limit how much
+    other metrics may get worse. ``deltas`` holds candidate minus base with a paired
+    interval for success, cost per task and every guardrail; compare() computes it.
 
     ``step=True`` is the rule for one step of an improvement loop. A release asks whether
     the candidate may serve users, so a candidate below the bar is rejected. A step asks
     whether the candidate is a better base for the next change, so a bar that the base
-    misses too does not reject it: the intervals decide. A bar the base clears still
-    rejects a candidate that misses it. A step is kept for higher success only, never for
+    misses decides nothing either way: missing it too does not reject the candidate, and
+    clearing it does not adopt the candidate. The intervals decide. A bar the base clears
+    still rejects a candidate that misses it. A step is kept for higher success only, never for
     lower cost alone: two runs of one harness differ in tokens by sampling, and over a
     few dozen tasks that difference can look like a saving.
 
@@ -189,9 +190,9 @@ def decide(
         return "reject", new
     if sc["violations"] > sb["violations"]:
         return "reject", [f"more critical violations: {sc['violations']} vs {sb['violations']}"]
-    if base_missed and not missed:
+    if base_missed and not missed and not step:
         return "adopt", ["the base misses the bar: " + "; ".join(base_missed.values())]
-    # Only in a step: both miss the same bars, and the candidate has to be closer.
+    # In a step, a bar the base misses decides nothing either way: the intervals decide.
     below = ["still below the bar: " + "; ".join(missed.values())] if missed else []
     if sb.get("tasks", MIN_TASKS) < MIN_TASKS:
         return "inconclusive", [

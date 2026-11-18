@@ -306,7 +306,7 @@ worse. A guardrail is written like a gate but on the difference, candidate minus
 absolute limit, such as a maximum latency, in the gates. The rule decides:
 
 1. **reject** if the candidate misses a gate or has more critical violations;
-2. **adopt** if the base misses a gate the candidate clears;
+2. **adopt** if the base misses a gate the candidate clears (not in a step, see below);
 3. **reject** if the success interval lies below `-margin`, or a guardrail's interval lies
    entirely past its limit;
 4. **adopt** if the success interval lies above 0 and a sign test agrees, or if the
@@ -347,8 +347,10 @@ for the next change? Far below the bar, the release rule rejects every candidate
 each one still misses the bar, and the loop never moves.
 
 `compare(usecase, base, candidate, step=True)` decides a step. A gate that the base
-misses too does not reject the candidate: the intervals of rules 3 to 5 decide whether it
-is better, and the reasons say that it is still below the bar. A gate that the base
+misses decides nothing either way: a candidate that misses it too is not rejected, and a
+candidate that clears it is not adopted for that alone (rule 2 is off). The intervals of
+rules 3 to 5 decide whether it is better, and the reasons say when it is still below the
+bar. A gate that the base
 clears still rejects a candidate that misses it, and so does a new critical violation.
 Decide the release with the default rule when the loop is done, on tasks it has not
 used.
