@@ -10,7 +10,7 @@ change.
 It is the companion code for the article on evaluating agent harnesses in the
 [Recursive Harness Engineering](https://slavadubrov.com/blog/) series. The
 [agent-harness-lab](https://github.com/slavadubrov/agent-harness-lab-public) installs it
-to evaluate five designs of one support assistant, from a plain agent to a workflow with
+to evaluate six designs of one support assistant, from a plain agent to a workflow with
 no agent.
 
 - No dependencies outside the standard library. Python 3.12 or later.
@@ -358,10 +358,17 @@ runs with a critical violation.
 Decide the release with the default rule when the loop is done, on tasks it has not
 used.
 
-A step is kept for higher success only. The cheaper-at-no-loss route of rule 4 is off:
-two runs of one harness differ in tokens by sampling, and over a few dozen tasks that
-difference can pass for a saving. Check your own setup the same way: run the base twice
-with new samples and give the pair to the rule. The answer should be inconclusive.
+A step requires a positive paired success interval, enough task wins for the sign
+test, and satisfied guardrails. At the default 95% level, 4 better and 0 worse
+gives p = 0.125, as does 6 better and 1 worse. Six better and 0 worse gives
+p = 0.03125 and clears the sign test. Count tasks with room to improve when
+designing the validation set for a focused change. The
+[saved support campaign](https://github.com/slavadubrov/agent-harness-lab-public/blob/main/reports/part-5/support/REPORT.md)
+shows both inconclusive cases.
+
+A step cannot adopt a change for cost alone. Two runs of one harness can differ in
+token use by sampling. Run the base twice with fresh samples and compare them
+with the step rule. The answer should be inconclusive.
 
 `level` sets the confidence level of the paired intervals, 0.95 by default. For K
 proposals, repeat the comparisons at `level=1 - 0.05 / K` to see which decisions still
