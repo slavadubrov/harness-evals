@@ -1335,3 +1335,13 @@ def test_decide_requires_task_counts_to_adopt_for_higher_success(step):
     assert decide(uc, summary, summary, deltas, step=step)[0] == "inconclusive"
     assert decide(uc, summary, summary, deltas, step=step, changed=(4, 0))[0] == "inconclusive"
     assert decide(uc, summary, summary, deltas, step=step, changed=(6, 0))[0] == "adopt"
+
+
+def test_development_test_preserves_original_task_membership():
+    from harness_evals import Task, UseCase
+
+    original = UseCase("shop", [Task(s, s, (), split=s) for s in ("dev", "val", "test")])
+    pooled = original.development_test()
+    assert [t.id for t in pooled.split("dev")] == ["dev", "val"]
+    assert pooled.split("test") == original.split("test")
+    assert [t.id for t in original.split("val")] == ["val"]

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from math import isfinite
 from typing import Any
 
@@ -69,6 +69,18 @@ class UseCase:
 
     def split(self, name: str) -> list[Task]:
         return [t for t in self.tasks if t.split == name]
+
+    def development_test(self) -> UseCase:
+        """Pool legacy validation cases into development, preserving task IDs and checks."""
+        unknown = {task.split for task in self.tasks} - {"dev", "val", "test"}
+        if unknown:
+            raise ValueError(f"unexpected splits for a development/test study: {sorted(unknown)}")
+        return replace(
+            self,
+            tasks=[
+                replace(task, split="dev") if task.split == "val" else task for task in self.tasks
+            ],
+        )
 
     def grade(self, episodes: Sequence[Episode]) -> list[Grade]:
         """Grade episodes against this use case. An unknown task id is an error, not a

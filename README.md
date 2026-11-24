@@ -448,3 +448,8 @@ uv run ruff check . && uv run ruff format --check .
 ```
 
 MIT licensed.
+
+For a development/test campaign, call `case.development_test()` to pool existing
+validation tasks into development. Use development runs for diagnosis and selection,
+then compare the frozen starting and selected harnesses on test. Repeated selection
+on development makes its gain an exploratory statistic.
