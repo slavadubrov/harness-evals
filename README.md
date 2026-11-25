@@ -27,9 +27,9 @@ and where each one fails.
 ## Install
 
 ```bash
-uv add "harness-evals @ git+https://github.com/slavadubrov/harness-evals@v0.6.0"
+uv add "harness-evals @ git+https://github.com/slavadubrov/harness-evals@v0.7.0"
 # or
-pip install "git+https://github.com/slavadubrov/harness-evals@v0.6.0"
+pip install "git+https://github.com/slavadubrov/harness-evals@v0.7.0"
 ```
 
 ## Quickstart
@@ -38,7 +38,7 @@ The example runs offline in a second. It is in the repository, not in the instal
 package:
 
 ```bash
-git clone --depth 1 --branch v0.6.0 https://github.com/slavadubrov/harness-evals
+git clone --depth 1 --branch v0.7.0 https://github.com/slavadubrov/harness-evals
 cd harness-evals
 uv run python examples/refund_desk.py out
 ```
@@ -366,9 +366,9 @@ designing the validation set for a focused change. The
 [saved support campaign](https://github.com/slavadubrov/agent-harness-lab-public/blob/main/reports/part-5/support/REPORT.md)
 shows both inconclusive cases.
 
-A step cannot adopt a change for cost alone. Two runs of one harness can differ in
-token use by sampling. Run the base twice with fresh samples and compare them
-with the step rule. The answer should be inconclusive.
+With the default objective, a step cannot adopt a change for cost alone. Two runs of one
+harness can differ in token use by sampling. Run the base twice with fresh samples and
+compare them with the step rule. The answer should be inconclusive.
 
 `level` sets the confidence level of the paired intervals, 0.95 by default. For K
 proposals, repeat the comparisons at `level=1 - 0.05 / K` to see which decisions still
@@ -379,6 +379,33 @@ separate test tasks.
 ```python
 c = compare(USECASE, base, candidate, step=True, level=1 - 0.05 / 8)
 ```
+
+#### Objectives
+
+By default a step tries to raise success. `objective` names another metric to lower
+instead: `cost_per_task`, `latency_p50`, `latency_p95`, `calls_per_task`,
+`tokens_per_task`, or a guardrail metric where smaller is better. An objective other
+than success applies to steps only; `compare` raises `ValueError` without `step=True`.
+
+```python
+c = compare(USECASE, base, candidate, step=True, objective="cost_per_task")
+```
+
+The gates, the critical violations and the guardrails apply as before. Success is held,
+not raised: the step is rejected if the whole success interval lies below `-margin`, and
+inconclusive if only its lower bound does. Equal task success rates give `[0, 0]`, which
+counts as held. The step is adopted only if the whole interval of the objective lies
+below zero; an unknown cost is inconclusive. A guardrail on the objective itself rejects
+when its whole interval is past the limit and otherwise decides nothing. The reasons
+name the metric, its interval and the success interval.
+
+Two runs of one harness differ in tokens, cost and latency by sampling alone. Before a
+campaign on cost, run the base twice and compare the runs with the same objective. The
+answer should be inconclusive; if it is adopt, add tasks or trials.
+
+Latency also changes with the provider's load over the day. Run the base and the
+candidate close together in time when the objective is a latency, or the comparison
+measures the hour rather than the harness.
 
 ## From saved runs
 
@@ -393,7 +420,8 @@ harness-evals failures runs/evaluation/episodes.jsonl --usecase my_usecase:USECA
 harness-evals digest runs/evaluation/episodes.jsonl --usecase my_usecase:USECASE > failures.md
 ```
 
-`compare` takes `--step` and `--level 0.99` for a step of an improvement loop.
+`compare` takes `--step`, `--level 0.99` and `--objective cost_per_task` for a step of an
+improvement loop.
 
 `compare` requires the manifest beside each episodes file. It checks the manifests
 against each other and against the current use case before grading; the other commands

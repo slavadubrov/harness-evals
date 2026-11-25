@@ -1335,3 +1335,145 @@ def test_decide_requires_task_counts_to_adopt_for_higher_success(step):
     assert decide(uc, summary, summary, deltas, step=step)[0] == "inconclusive"
     assert decide(uc, summary, summary, deltas, step=step, changed=(4, 0))[0] == "inconclusive"
     assert decide(uc, summary, summary, deltas, step=step, changed=(6, 0))[0] == "adopt"
+
+
+# -- a step that optimizes cost, latency or tokens ------------------------------------------
+
+STEADY = {"tasks": 12, "violations": 0}
+
+
+def _deltas(success=(0.0, 0.0), cost=(-0.004, -0.001), **more):
+    out = {"success": (sum(success) / 2, success), "cost_per_task": None}
+    if cost is not None:
+        out["cost_per_task"] = (sum(cost) / 2, cost)
+    out.update(more)
+    return out
+
+
+def test_a_cost_step_adopts_a_cheaper_candidate_whose_success_holds():
+    uc = UseCase("u", [])
+    decision, reasons = decide(uc, STEADY, STEADY, _deltas(), step=True, objective="cost_per_task")
+    assert decision == "adopt"
+    assert reasons == [
+        "cost_per_task is lower: -0.00400 to -0.00100",
+        "success holds: +0.000 to +0.000, no lower than -0",
+    ]
+    # The same candidate under the success objective is not adopted.
+    assert decide(uc, STEADY, STEADY, _deltas(), step=True)[0] == "inconclusive"
+
+
+@pytest.mark.parametrize(
+    "success, margin, decision",
+    [
+        ((-0.2, -0.05), 0.0, "reject"),  # the whole interval is below -margin
+        ((-0.2, -0.05), 0.1, "inconclusive"),  # a loss past the margin is not ruled out
+        ((-0.05, 0.1), 0.0, "inconclusive"),
+        ((-0.05, 0.1), 0.05, "adopt"),
+        ((0.0, 0.1), 0.0, "adopt"),
+    ],
+)
+def test_a_cost_step_holds_success_within_the_margin(success, margin, decision):
+    uc = UseCase("u", [], margin=margin)
+    deltas = _deltas(success=success)
+    got, reasons = decide(uc, STEADY, STEADY, deltas, step=True, objective="cost_per_task")
+    assert got == decision
+    if decision == "inconclusive":
+        assert reasons[0].startswith("success may be lower by more than")
+
+
+@pytest.mark.parametrize("cost", [(-0.004, 0.001), (0.001, 0.003), None])
+def test_a_cost_step_needs_the_whole_cost_interval_below_zero(cost):
+    uc = UseCase("u", [])
+    decision, reasons = decide(
+        uc, STEADY, STEADY, _deltas(cost=cost), step=True, objective="cost_per_task"
+    )
+    assert decision == "inconclusive" and reasons[1].startswith("success holds")
+
+
+def test_a_cost_step_keeps_the_gates_violations_and_other_guardrails():
+    uc = UseCase("u", [], gates={"success": (">=", 0.5)})
+    low = dict(STEADY, success=0.4)
+    ok = dict(STEADY, success=0.6)
+    d = _deltas(latency_p95=(0.5, (0.2, 0.8)))
+    assert decide(uc, ok, low, d, step=True, objective="cost_per_task")[0] == "reject"
+    decision, reasons = decide(uc, low, low, d, step=True, objective="cost_per_task")
+    assert decision == "adopt" and reasons[-1].startswith("still below the bar")
+    worse = dict(ok, violations=1)
+    assert decide(uc, ok, worse, d, step=True, objective="cost_per_task")[0] == "reject"
+    uc.guardrails = {"latency_p95": ("<=", 0.1)}  # the whole interval is past it
+    assert decide(uc, ok, ok, d, step=True, objective="cost_per_task")[0] == "reject"
+    uc.guardrails = {"latency_p95": ("<=", 0.5)}  # the interval may cross it
+    decision, reasons = decide(uc, ok, ok, d, step=True, objective="cost_per_task")
+    assert decision == "inconclusive" and "may pass its limit" in reasons[-1]
+
+
+def test_a_guardrail_on_the_objective_only_rejects():
+    uc = UseCase("u", [], guardrails={"cost_per_task": ("<=", -0.002)})
+    # The interval crosses the guardrail: the objective's own interval decides.
+    assert decide(uc, STEADY, STEADY, _deltas(), step=True, objective="cost_per_task")[0] == "adopt"
+    d = _deltas(cost=(-0.0015, -0.0005))  # the whole interval is past it
+    assert decide(uc, STEADY, STEADY, d, step=True, objective="cost_per_task")[0] == "reject"
+
+
+def test_an_objective_must_be_a_paired_lower_is_better_metric_and_a_step():
+    uc = UseCase("u", [])
+    for name in ["speed", "violations", "success_rate", "cost_per_success"]:
+        with pytest.raises(ValueError, match="objective"):
+            decide(uc, STEADY, STEADY, _deltas(), step=True, objective=name)
+    with pytest.raises(ValueError, match="steps only"):
+        decide(uc, STEADY, STEADY, _deltas(), objective="cost_per_task")
+
+
+def test_a_latency_step_compares_harnesses_on_paired_tasks():
+    uc, base = grades_for({f"t{i}": [True] * 3 for i in range(8)}, "base")
+    _, cand = grades_for({f"t{i}": [True] * 3 for i in range(8)}, "cand")
+    for g in cand:
+        g.episode.latency_s = 0.5  # the base takes 1 s
+    c = compare(uc, base, cand, step=True, objective="latency_p95")
+    assert c.decision == "adopt" and c.reasons[0] == "latency_p95 is lower: -0.50 to -0.50"
+    with pytest.raises(ValueError, match="steps only"):
+        compare(uc, base, cand, objective="latency_p95")
+
+
+def test_two_runs_of_one_harness_are_rarely_adopted_on_tokens_or_cost():
+    import random
+
+    rng = random.Random(7)
+    adopted = {"tokens_per_task": 0, "cost_per_task": 0}
+    for _ in range(40):
+        runs = []
+        for name in ("base", "again"):
+            uc, grades = grades_for({f"t{i}": [True] * 3 for i in range(16)}, name)
+            for g in grades:  # both runs sample their tokens from the same distribution
+                g.episode.input_tokens = 1000 + 50 * int(g.episode.task_id[1:])
+                g.episode.output_tokens = rng.randint(100, 300)
+                g.episode.cost_usd = g.episode.output_tokens * 1e-5
+            runs.append(grades)
+        c = compare(uc, *runs, step=True, objective="tokens_per_task")
+        adopted["tokens_per_task"] += c.decision == "adopt"
+        sb, sc = c.summaries.values()
+        cost = decide(uc, sb, sc, c.deltas, step=True, objective="cost_per_task")
+        adopted["cost_per_task"] += cost[0] == "adopt"
+    # The interval is one-sided here: about 2.5% of rounds, 1 of 40, adopt by chance.
+    # The bound of 3 allows for the sampling error of 40 rounds.
+    assert all(n <= 3 for n in adopted.values()), adopted
+
+
+def test_the_cli_compare_takes_an_objective(tmp_path, capsys, monkeypatch):
+    from harness_evals.cli import main
+
+    example = Path(__file__).parents[1] / "examples"
+    monkeypatch.syspath_prepend(str(example))
+    import refund_desk
+
+    adapters = {
+        "agent": refund_desk.adapter(refund_desk.agent),
+        "workflow": refund_desk.adapter(refund_desk.workflow),
+    }
+    run(refund_desk.USECASE, adapters, trials=3, frozen={"model": "simulated"}, out=tmp_path)
+    path = str(tmp_path / "episodes.jsonl")
+    args = ["compare", path, "--usecase", "refund_desk", "--base", "agent"]
+    main([*args, "--candidate", "workflow", "--step", "--objective", "cost_per_task"])
+    assert "Decision:" in capsys.readouterr().out
+    with pytest.raises(SystemExit, match="objective"):
+        main([*args, "--candidate", "workflow", "--step", "--objective", "speed"])

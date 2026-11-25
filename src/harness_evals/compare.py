@@ -12,6 +12,7 @@ from typing import Any
 
 from harness_evals.core import Grade
 from harness_evals.metrics import (
+    LOWER_IS_BETTER,
     bootstrap,
     by_task,
     paired_interval,
@@ -84,6 +85,7 @@ def compare(
     seed: int = 0,
     step: bool = False,
     level: float = 0.95,
+    objective: str = "success",
 ) -> Comparison:
     """Pair the harnesses task by task: both ran the same tasks, so per-task differences
     cancel the variation that comes from task difficulty. Every compared metric gets a
@@ -93,7 +95,9 @@ def compare(
     that the base misses too does not reject the candidate (see decide()). ``level`` is
     the confidence level of the paired intervals. For K proposals, a stricter level of
     ``1 - 0.05 / K`` shows which decisions still hold. With proposals chosen using earlier
-    validation results, this does not guarantee a 5% campaign error rate."""
+    validation results, this does not guarantee a 5% campaign error rate.
+
+    ``objective`` names the metric a step tries to improve; see decide()."""
     if not 0 < level < 1:
         raise ValueError("level must be between 0 and 1")
     for grades in (base, candidate):
@@ -146,7 +150,14 @@ def compare(
         level=level,
     )
     c.decision, c.reasons = decide(
-        usecase, sb, sc, deltas, step=step, changed=(len(c.better), len(c.worse)), level=level
+        usecase,
+        sb,
+        sc,
+        deltas,
+        step=step,
+        changed=(len(c.better), len(c.worse)),
+        level=level,
+        objective=objective,
     )
     return c
 
@@ -160,6 +171,7 @@ def decide(
     step: bool = False,
     changed: tuple[int, int] | None = None,
     level: float = 0.95,
+    objective: str = "success",
 ) -> tuple[str, list[str]]:
     """The adoption rule. Without clear evidence for the candidate, keep the base.
 
@@ -174,14 +186,22 @@ def decide(
     whether the candidate is a better base for the next change, so a bar that the base
     misses decides nothing either way: missing it too does not reject the candidate, and
     clearing it does not adopt the candidate. The intervals decide. A bar the base clears
-    still rejects a candidate that misses it. A step is kept for higher success only, never for
-    lower cost alone: two runs of one harness differ in tokens by sampling, and over a
-    few dozen tasks that difference can look like a saving.
+    still rejects a candidate that misses it. With the default objective, a step is kept for
+    higher success only, never for lower cost alone: two runs of one harness differ in
+    tokens by sampling, and over a few dozen tasks that difference can look like a saving.
 
     ``changed`` is how many tasks the candidate passes more often and less often than the
     base. To adopt for higher success, more tasks must improve than worsen and the
     two-sided sign test must pass at ``level``. Without those counts the result for
-    higher success is inconclusive."""
+    higher success is inconclusive.
+
+    ``objective`` other than success is a lower-is-better metric in ``deltas``, such as
+    ``cost_per_task``, and applies to steps only. Gates, violations and guardrails apply
+    as above. Success must hold: the step is rejected if the whole success interval is
+    below ``-margin`` and inconclusive if its lower bound is. The step is adopted only if
+    the whole interval of the objective is below zero. A guardrail on the objective itself
+    rejects only when the whole interval is past its limit."""
+    _check_objective(objective, deltas, step)
     if not isfinite(usecase.margin) or usecase.margin < 0:
         raise ValueError("margin must be finite and nonnegative")
     check_guardrails(usecase.guardrails, usecase.metrics)
@@ -204,18 +224,22 @@ def decide(
     worse = [f"success is lower: {lo:+.3f} to {hi:+.3f}"] if hi < -m else []
     unsure = []
     for name, (op, limit) in usecase.guardrails.items():
+        own = name == objective != "success"  # the objective decides its own direction
         delta = deltas.get(name)
         if delta is None:
-            unsure.append(f"{name} could not be compared")
+            if not own:
+                unsure.append(f"{name} could not be compared")
             continue
         _, (dlo, dhi) = delta
         span = f"{name} changes by {_num(name, dlo)} to {_num(name, dhi)}"
         if not OPS[op](dhi if op == ">=" else dlo, limit):  # the whole interval is past it
             worse.append(f"{span}, past its limit {op} {limit:+g}")
-        elif not OPS[op](dlo if op == ">=" else dhi, limit):
+        elif not own and not OPS[op](dlo if op == ">=" else dhi, limit):
             unsure.append(f"{span}, which may pass its limit {op} {limit:+g}")
     if worse:
         return "reject", worse
+    if objective != "success":
+        return _objective_step(objective, deltas, (lo, hi), m, unsure, below)
     cost = deltas.get("cost_per_task")
     known = not (sb.get("unknown_cost") or sc.get("unknown_cost"))
     if lo > 0:
@@ -251,6 +275,52 @@ def decide(
     if unsure:
         return "inconclusive", [f"{win}, but a guardrail may break; keep the base", *unsure]
     return "adopt", [win, *below]
+
+
+def _check_objective(objective: str, deltas: Mapping[str, Delta | None], step: bool) -> None:
+    if objective == "success":
+        return
+    if not step:
+        raise ValueError("objectives other than success apply to steps only: pass step=True")
+    if objective not in LOWER_IS_BETTER or objective not in deltas:
+        known = sorted(m for m in deltas if m in LOWER_IS_BETTER)
+        raise ValueError(
+            f"objective {objective!r}: use success or a lower-is-better metric with a paired"
+            f" delta: {', '.join(known)}"
+        )
+
+
+def _objective_step(
+    name: str,
+    deltas: Mapping[str, Delta | None],
+    success: tuple[float, float],
+    m: float,
+    unsure: list[str],
+    below: list[str],
+) -> tuple[str, list[str]]:
+    """The end of decide() for a step that optimizes ``name`` while success holds."""
+    lo, hi = success
+    if lo < -m:
+        return "inconclusive", [
+            f"success may be lower by more than {m:g}: {lo:+.3f} to {hi:+.3f}; keep the base",
+            *unsure,
+        ]
+    held = f"success holds: {lo:+.3f} to {hi:+.3f}, no lower than -{m:g}"
+    delta = deltas[name]
+    if delta is None:
+        return "inconclusive", [f"{name} could not be compared; keep the base", held, *unsure]
+    _, (olo, ohi) = delta
+    span = f"{_num(name, olo)} to {_num(name, ohi)}"
+    if ohi >= 0:
+        return "inconclusive", [
+            f"{name} changes by {span}, which does not establish a decrease; keep the base",
+            held,
+            *unsure,
+        ]
+    win = f"{name} is lower: {span}"
+    if unsure:
+        return "inconclusive", [f"{win}, but a guardrail may break; keep the base", held, *unsure]
+    return "adopt", [win, held, *below]
 
 
 def _num(name: str, v: float) -> str:

@@ -81,6 +81,9 @@ def _main(argv: list[str] | None) -> None:
     p.add_argument("--by", choices=["checks", "runs"], default="checks", help="failures: columns")
     p.add_argument("--step", action="store_true", help="compare: decide a loop step, not a release")
     p.add_argument("--level", type=float, default=0.95, help="compare: interval confidence level")
+    p.add_argument(
+        "--objective", default="success", help="compare: the metric a step improves (with --step)"
+    )
     a = p.parse_args(argv)
 
     uc = _usecase(a.usecase)
@@ -124,7 +127,14 @@ def _main(argv: list[str] | None) -> None:
     if a.command == "compare":
         if not (a.base in grades and a.candidate in grades):
             raise SystemExit(f"--base and --candidate must be among: {', '.join(grades)}")
-        c = compare(uc, grades[a.base], grades[a.candidate], step=a.step, level=a.level)
+        c = compare(
+            uc,
+            grades[a.base],
+            grades[a.candidate],
+            step=a.step,
+            level=a.level,
+            objective=a.objective,
+        )
         print(comparison(c))
         return
     if a.command == "digest":  # Markdown: what each harness failed, task by task
