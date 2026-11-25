@@ -27,9 +27,9 @@ and where each one fails.
 ## Install
 
 ```bash
-uv add "harness-evals @ git+https://github.com/slavadubrov/harness-evals@v0.7.0"
+uv add "harness-evals @ git+https://github.com/slavadubrov/harness-evals@v0.8.0"
 # or
-pip install "git+https://github.com/slavadubrov/harness-evals@v0.7.0"
+pip install "git+https://github.com/slavadubrov/harness-evals@v0.8.0"
 ```
 
 ## Quickstart
@@ -38,7 +38,7 @@ The example runs offline in a second. It is in the repository, not in the instal
 package:
 
 ```bash
-git clone --depth 1 --branch v0.7.0 https://github.com/slavadubrov/harness-evals
+git clone --depth 1 --branch v0.8.0 https://github.com/slavadubrov/harness-evals
 cd harness-evals
 uv run python examples/refund_desk.py out
 ```
@@ -309,7 +309,8 @@ absolute limit, such as a maximum latency, in the gates. The rule decides:
 2. **adopt** if the base misses a gate the candidate clears (not in a step, see below);
 3. **reject** if the success interval lies below `-margin`, or a guardrail's interval lies
    entirely past its limit;
-4. **adopt** if the success interval lies above 0 and a sign test agrees, or if the
+4. **adopt** if the success interval lies above 0 and a Wilcoxon signed-rank test
+   agrees, or if the
    interval has nonzero width, its lower bound is at least `-margin`, and the cost
    interval lies below 0. Every guardrail's interval must stay within its limit;
 5. otherwise **inconclusive**: keep the base, and add tasks or runs.
@@ -318,12 +319,24 @@ Steps 1 and 2 read point estimates: a gate ignores the interval. Steps 3 and 4 n
 least six tasks; with fewer, the result is inconclusive. Six is a minimum policy,
 not a guarantee that the bootstrap interval has 95% coverage.
 
-The sign test in step 4 counts tasks, not runs. Among the tasks whose pass rate differs
-between the two harnesses, the candidate must improve more tasks than it worsens.
-The two-sided `sign_test(better, worse)` must also be at most `1 - level`. An interval over a few dozen
-tasks can sit above zero when only four of them changed, and two runs of one harness can
-differ on four tasks. Four better and none worse gives p = 0.125 and keeps the base; six
-and none, or twelve against one, can decide.
+The Wilcoxon signed-rank test in step 4 looks at the tasks whose pass rate differs
+between the two harnesses. It ranks these tasks by the size of the change, smallest
+first, and adds up the ranks of the tasks that improved and the ranks of the tasks that
+got worse. The candidate's sum must be the larger one, and the two-sided
+`wilcoxon_test(diffs)` must be at most `1 - level`. An interval over a few dozen tasks can
+sit above zero when only four of them changed, and two runs of one harness can differ on
+four tasks. Four better and none worse gives p = 0.125 and keeps the base. When no task
+gets worse, at least six tasks must change in the candidate's favour: five give
+p = 0.0625 and six give p = 0.03125.
+
+Before version 0.8.0 the rule used a sign test. A sign test counts the tasks that improved
+and the tasks that got worse, and ignores the size of each change. It counts a task that
+lost one run of three the same as a task that now fails every run. The Wilcoxon test
+gives the small loss a small rank. Six tasks that go from 0 of 3 runs to 3 of 3, against
+one task that loses one run of three, give p = 0.125 under the sign test and p = 0.031
+under the Wilcoxon test. `sign_test(better, worse)` stays in the package for comparison;
+no decision uses it. Fix the choice of test before a campaign starts. A test chosen after
+the results are known no longer holds the error rate at `1 - level`.
 
 ![The adoption rule as six questions asked in order, each with a reject or adopt exit and inconclusive at the end, beside a number line showing how the success interval is read](docs/adoption-rule.svg)
 
@@ -337,9 +350,11 @@ produce `[0, 0]`, but that result does not bound the loss on new tasks. The comp
 keeps the interval as a descriptive result and returns inconclusive unless an earlier
 rule decides. This check does not validate bootstrap coverage for other cases.
 `Comparison.deltas` holds every compared metric's difference and interval, and
-`decide(usecase, base_summary, candidate_summary, deltas, changed=(better, worse))`
-applies the rule to them. Pass the two counts to decide on a success gain. If they
-are missing, the evidence for that gain is inconclusive. `compare()` supplies both.
+`decide(usecase, base_summary, candidate_summary, deltas, changed=(better, worse),
+diffs=diffs)` applies the rule to them. `diffs` is the per-task success difference,
+candidate minus base. Pass it to decide on a success gain. If it is missing, the evidence
+for that gain is inconclusive. The counts appear in the reasons; without them, `decide`
+counts them from `diffs`. `compare()` supplies both.
 
 ### One step of an improvement loop
 
@@ -358,13 +373,16 @@ runs with a critical violation.
 Decide the release with the default rule when the loop is done, on tasks it has not
 used.
 
-A step requires a positive paired success interval, enough task wins for the sign
-test, and satisfied guardrails. At the default 95% level, 4 better and 0 worse
-gives p = 0.125, as does 6 better and 1 worse. Six better and 0 worse gives
-p = 0.03125 and clears the sign test. Count tasks with room to improve when
-designing the validation set for a focused change. The
-[saved support campaign](https://github.com/slavadubrov/agent-harness-lab-public/blob/main/reports/part-5/support/REPORT.md)
-shows both inconclusive cases.
+A step requires a positive paired success interval, a Wilcoxon signed-rank test that
+favours the candidate, and satisfied guardrails. At the default 95% level, 4 better and
+0 worse gives p = 0.125, and 6 better and 2 worse of equal size gives p = 0.289. Six
+better and 0 worse gives p = 0.03125 and passes. So do 6 tasks that go from 0 of 3 runs to
+3 of 3 against 1 task that loses one run of three (p = 0.031). Count tasks with room to
+improve when designing the validation set for a focused change. The
+[saved support campaign](https://github.com/slavadubrov/agent-harness-lab-public/blob/main/reports/part-5/support-sign-test/REPORT.md)
+ran under the sign test and kept none of its three candidates: 6 better and 1 worse,
+6 better and 2 worse, and 4 better and 0 worse. The rule now uses the Wilcoxon test,
+which would adopt the first of them.
 
 With the default objective, a step cannot adopt a change for cost alone. Two runs of one
 harness can differ in token use by sampling. Run the base twice with fresh samples and

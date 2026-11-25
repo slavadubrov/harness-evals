@@ -1,6 +1,9 @@
 import json
+import random
+import statistics
 import subprocess
 import sys
+from itertools import product
 from math import isclose
 from pathlib import Path
 
@@ -38,6 +41,7 @@ from harness_evals import (
     sign_test,
     state,
     summarize,
+    wilcoxon_test,
 )
 
 REFUND = Action("refund", {"order": "A1", "cents": 4800})
@@ -1310,7 +1314,11 @@ def test_higher_success_on_four_tasks_is_not_enough_to_adopt():
     _, ga = grades_for(again, "again")
     c = compare(uc, gb, ga)
     assert c.ci[0] > 0 and (len(c.better), len(c.worse)) == (4, 0)
-    assert c.decision == "inconclusive" and "sign test p = 0.125" in c.reasons[0]
+    assert c.decision == "inconclusive"
+    assert (
+        "Wilcoxon signed-rank test" in c.reasons[0]
+        and "4 better, 0 worse, p = 0.125" in c.reasons[0]
+    )
     # Six tasks that all improve can decide, and so can twelve against one.
     six = {f"t{i}": [True, i < 6, False] for i in range(36)}
     assert compare(uc, gb, grades_for(six, "six")[1]).decision == "adopt"
@@ -1318,23 +1326,93 @@ def test_higher_success_on_four_tasks_is_not_enough_to_adopt():
     assert round(sign_test(9, 2), 4) == 0.0654 and round(sign_test(12, 1), 4) == 0.0034
 
 
-def test_sign_test_must_favor_the_candidate():
-    # Six large gains raise the mean, but eighteen tasks each lose one pass.
+def test_rank_sums_must_favor_the_candidate():
+    # Six large gains raise the mean, but eighteen tasks each lose one pass. Ranked by
+    # size, the eighteen small losses still sum to more than the six gains.
     uc, base = grades_for({f"t{i}": [i < 18] + [False] * 19 for i in range(24)}, "base")
     _, candidate = grades_for({f"t{i}": [i >= 18] * 20 for i in range(24)}, "candidate")
     c = compare(uc, base, candidate, step=True)
-    assert c.ci[0] > 0 and sign_test(len(c.better), len(c.worse)) < 0.05
+    assert c.ci[0] > 0 and wilcoxon_test([1.0] * 6 + [-0.05] * 18) > 0.05
     assert c.decision == "inconclusive" and "6 better, 18 worse" in c.reasons[0]
 
 
 @pytest.mark.parametrize("step", [False, True])
-def test_decide_requires_task_counts_to_adopt_for_higher_success(step):
+def test_decide_requires_task_differences_to_adopt_for_higher_success(step):
     uc = UseCase("u", [])
     summary = {"tasks": 36, "violations": 0}
     deltas = {"success": (0.04, (0.01, 0.07))}
-    assert decide(uc, summary, summary, deltas, step=step)[0] == "inconclusive"
-    assert decide(uc, summary, summary, deltas, step=step, changed=(4, 0))[0] == "inconclusive"
-    assert decide(uc, summary, summary, deltas, step=step, changed=(6, 0))[0] == "adopt"
+    decision, reasons = decide(uc, summary, summary, deltas, step=step, changed=(6, 0))
+    assert decision == "inconclusive" and "paired task differences are missing" in reasons[0]
+    four, six = [1.0] * 4 + [0.0] * 32, [1.0] * 6 + [0.0] * 30
+    assert decide(uc, summary, summary, deltas, step=step, diffs=four)[0] == "inconclusive"
+    assert decide(uc, summary, summary, deltas, step=step, diffs=six)[0] == "adopt"
+
+
+def test_wilcoxon_test_matches_hand_computed_values():
+    assert wilcoxon_test([1.0] * 6) == 2 / 64 == 0.03125
+    assert wilcoxon_test([1 / 3] * 5 + [0.0] * 20) == 0.0625
+    assert wilcoxon_test([1.0] * 4) == 0.125
+    # The loss has rank 1; only sums <= 1 or >= 27 are as far from the mean of 14.
+    assert wilcoxon_test([1.0] * 6 + [-1 / 3]) == 4 / 128 == 0.03125
+    # With every difference tied, the test counts signs like the sign test.
+    assert wilcoxon_test([1.0] * 6 + [-1.0] * 2) == sign_test(6, 2) == 0.2890625
+    assert wilcoxon_test([-1.0] * 6 + [1 / 3]) == wilcoxon_test([1.0] * 6 + [-1 / 3])
+    assert wilcoxon_test([0.0, 1e-13, -1e-13]) == wilcoxon_test([]) == 1.0
+    assert wilcoxon_test([2 / 3 - 1 / 3, 1 / 3, -1 / 3]) == 1.0  # roundoff still ties
+
+
+def test_wilcoxon_test_matches_every_sign_assignment():
+    rng = random.Random(3)
+    for _ in range(20):
+        d = [rng.choice([-1, -2 / 3, -1 / 3, 0, 1 / 3, 2 / 3, 1]) for _ in range(rng.randint(1, 9))]
+        nz = sorted((x for x in d if x), key=abs)
+        rank = {
+            a: statistics.fmean(i + 1 for i, x in enumerate(nz) if abs(x) == a)
+            for a in map(abs, nz)
+        }
+        ranks = [rank[abs(x)] for x in nz]
+        mean, obs = sum(ranks) / 2, sum(r for r, x in zip(ranks, nz, strict=True) if x > 0)
+        sums = [
+            sum(r for r, s in zip(ranks, signs, strict=True) if s)
+            for signs in product([0, 1], repeat=len(nz))
+        ]
+        expected = (
+            statistics.fmean(abs(w - mean) >= abs(obs - mean) - 1e-9 for w in sums) if nz else 1.0
+        )
+        assert isclose(wilcoxon_test(d), expected)
+
+
+def test_decide_weighs_the_size_of_each_change():
+    uc, s = UseCase("u", []), {"tasks": 32, "violations": 0}
+    deltas = {"success": (0.15, (0.05, 0.25))}
+    # Six tasks go from 0 of 3 runs to 3 of 3; one loses one run of three.
+    decision, reasons = decide(uc, s, s, deltas, step=True, diffs=[1.0] * 6 + [-1 / 3])
+    assert decision == "adopt" and sign_test(6, 1) == 0.125
+    decision, reasons = decide(uc, s, s, deltas, step=True, diffs=[1.0] * 4)
+    assert decision == "inconclusive" and "4 better, 0 worse, p = 0.125" in reasons[0]
+    decision, reasons = decide(uc, s, s, deltas, step=True, diffs=[1.0] * 6 + [-1.0] * 2)
+    assert decision == "inconclusive" and "6 better, 2 worse, p = 0.289" in reasons[0]
+
+
+def test_two_runs_of_one_harness_are_rarely_adopted():
+    # 32 tasks with fixed pass probabilities, 3 runs per task, run twice. The rule
+    # (interval above zero and Wilcoxon at 95%) should adopt about 2.5% or less.
+    # Measured: 17 of 1000 (1.7%); the interval alone is above zero in 22.
+    from harness_evals.metrics import bootstrap
+
+    rng = random.Random(7)
+    probs = [rng.random() for _ in range(32)]
+    uc, s = UseCase("u", []), {"tasks": 32, "violations": 0}
+    reps, adopted = 1000, 0
+    for rep in range(reps):
+        r = random.Random(rep)
+        d = [
+            (sum(r.random() < p for _ in range(3)) - sum(r.random() < p for _ in range(3))) / 3
+            for p in probs
+        ]
+        deltas = {"success": (statistics.fmean(d), bootstrap(d, seed=rep))}
+        adopted += decide(uc, s, s, deltas, step=True, diffs=d)[0] == "adopt"
+    assert adopted / reps <= 0.025 + 3 * (0.025 * 0.975 / reps) ** 0.5
 
 
 # -- a step that optimizes cost, latency or tokens ------------------------------------------

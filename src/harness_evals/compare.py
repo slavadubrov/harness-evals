@@ -29,14 +29,50 @@ Delta = tuple[float, tuple[float, float]]  # candidate minus base, and its 95% i
 COMPARED = ("cost_per_task", "latency_p50", "latency_p95", "calls_per_task", "tokens_per_task")
 # Minimum sample policy for interval-based decisions; this does not guarantee coverage.
 MIN_TASKS = 6
+ZERO = 1e-12  # a paired difference smaller than this counts as no change
 
 
 def sign_test(better: int, worse: int) -> float:
     """The two-sided p-value of a sign test over the tasks whose pass rate differs: how
     often chance alone splits them at least this unevenly. Tasks with no difference say
-    nothing, so four better and none worse gives 0.125 however many tasks there are."""
+    nothing, so four better and none worse gives 0.125 however many tasks there are.
+
+    No decision uses this test; decide() uses wilcoxon_test(). It stays for comparison
+    with the rule, as in the saved support campaign, which was decided with it."""
     n, k = better + worse, min(better, worse)
     return 1.0 if n == 0 else min(1.0, 2 * sum(comb(n, i) for i in range(k + 1)) / 2**n)
+
+
+def wilcoxon_test(diffs: Sequence[float]) -> float:
+    """The exact two-sided p-value of the Wilcoxon signed-rank test on paired differences.
+    Zero differences are dropped. The rest are ranked by size, with average ranks for
+    ties, and the statistic is the sum of the ranks of the positive differences. The
+    p-value is how often random signs put that sum at least as far from its mean."""
+    return _wilcoxon(diffs)[2]
+
+
+def _wilcoxon(diffs: Sequence[float]) -> tuple[int, int, float]:
+    """Twice the positive and the negative rank sums, and the two-sided p-value."""
+    d = sorted((x for x in diffs if abs(x) >= ZERO), key=abs)
+    if not d:
+        return 0, 0, 1.0
+    ranks = [0] * len(d)  # doubled average ranks, so ties stay integers
+    i = 0
+    while i < len(d):
+        j = i
+        while j + 1 < len(d) and abs(d[j + 1]) - abs(d[i]) < ZERO:
+            j += 1
+        ranks[i : j + 1] = [i + j + 2] * (j + 1 - i)
+        i = j + 1
+    total = sum(ranks)
+    pos = sum(r for r, x in zip(ranks, d, strict=True) if x > 0)
+    counts = [1] + [0] * total  # counts[w]: sign assignments whose positive sum is w
+    for r in ranks:
+        for w in range(total, r - 1, -1):
+            counts[w] += counts[w - r]
+    far = abs(2 * pos - total)
+    extreme = sum(c for w, c in enumerate(counts) if abs(2 * w - total) >= far)
+    return pos, total - pos, extreme / 2 ** len(d)
 
 
 def gate_failures(summary: dict[str, Any], gates: dict[str, tuple[str, float]]) -> list[str]:
@@ -156,6 +192,7 @@ def compare(
         deltas,
         step=step,
         changed=(len(c.better), len(c.worse)),
+        diffs=d,
         level=level,
         objective=objective,
     )
@@ -170,6 +207,7 @@ def decide(
     *,
     step: bool = False,
     changed: tuple[int, int] | None = None,
+    diffs: Sequence[float] | None = None,
     level: float = 0.95,
     objective: str = "success",
 ) -> tuple[str, list[str]]:
@@ -190,10 +228,12 @@ def decide(
     higher success only, never for lower cost alone: two runs of one harness differ in
     tokens by sampling, and over a few dozen tasks that difference can look like a saving.
 
-    ``changed`` is how many tasks the candidate passes more often and less often than the
-    base. To adopt for higher success, more tasks must improve than worsen and the
-    two-sided sign test must pass at ``level``. Without those counts the result for
-    higher success is inconclusive.
+    ``diffs`` holds the per-task success differences, candidate minus base, and
+    ``changed`` how many tasks the candidate passes more often and less often than the
+    base. To adopt for higher success, the ranks of the tasks that improve must sum to
+    more than the ranks of the tasks that get worse, and the two-sided Wilcoxon
+    signed-rank test must pass at ``level``. Without ``diffs`` the result for higher
+    success is inconclusive. Without ``changed`` the counts come from ``diffs``.
 
     ``objective`` other than success is a lower-is-better metric in ``deltas``, such as
     ``cost_per_task``, and applies to steps only. Gates, violations and guardrails apply
@@ -244,15 +284,18 @@ def decide(
     known = not (sb.get("unknown_cost") or sc.get("unknown_cost"))
     if lo > 0:
         win = f"success is higher: {lo:+.3f} to {hi:+.3f}"
-        if changed is None:
-            return "inconclusive", [f"{win}, but the paired task counts are missing", *unsure]
-        better, worse_count = changed
-        p = sign_test(better, worse_count)
-        if better <= worse_count or p > 1 - level:
+        if diffs is None:
+            return "inconclusive", [f"{win}, but the paired task differences are missing", *unsure]
+        better, worse_count = changed or (
+            sum(x >= ZERO for x in diffs),
+            sum(x <= -ZERO for x in diffs),
+        )
+        pos, neg, p = _wilcoxon(diffs)
+        if pos <= neg or p > 1 - level:
             return "inconclusive", [
-                f"success is higher on average ({lo:+.3f} to {hi:+.3f}), but the task counts"
-                f" do not support the gain: {better} better, {worse_count} worse"
-                f" (sign test p = {p:.3f}); keep the base",
+                f"success is higher on average ({lo:+.3f} to {hi:+.3f}), but the Wilcoxon"
+                f" signed-rank test does not support the gain: {better} better,"
+                f" {worse_count} worse, p = {p:.3f}; keep the base",
                 *unsure,
             ]
     elif isclose(lo, hi, rel_tol=0.0, abs_tol=1e-15):
