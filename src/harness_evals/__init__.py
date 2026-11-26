@@ -1,6 +1,6 @@
 """Evaluate an agent harness or workflow with the model held fixed."""
 
-__version__ = "0.8.0"
+__version__ = "0.9.0"
 
 from harness_evals.calibrate import agreement  # noqa: E402
 from harness_evals.compare import (  # noqa: E402
@@ -8,6 +8,7 @@ from harness_evals.compare import (  # noqa: E402
     compare,
     decide,
     gate_failures,
+    run_permutation_test,
     sign_test,
     wilcoxon_test,
 )
@@ -79,6 +80,7 @@ __all__ = [
     "pass_at_k",
     "pass_hat_k",
     "run",
+    "run_permutation_test",
     "save",
     "says",
     "sign_test",

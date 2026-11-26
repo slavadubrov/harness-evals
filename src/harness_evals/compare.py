@@ -7,6 +7,7 @@ import statistics
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from fractions import Fraction
 from math import comb, isclose, isfinite
 from typing import Any
 
@@ -73,6 +74,45 @@ def _wilcoxon(diffs: Sequence[float]) -> tuple[int, int, float]:
     far = abs(2 * pos - total)
     extreme = sum(c for w, c in enumerate(counts) if abs(2 * w - total) >= far)
     return pos, total - pos, extreme / 2 ** len(d)
+
+
+def run_permutation_test(
+    base_runs: Sequence[Sequence[bool]], candidate_runs: Sequence[Sequence[bool]]
+) -> float:
+    """The exact two-sided p-value of a stratified permutation test over runs.
+
+    ``base_runs[i]`` and ``candidate_runs[i]`` hold the pass results of task i's runs in
+    each harness; the two may have different numbers of runs. If the change does nothing,
+    the labels base and candidate can be swapped between the runs of one task. The
+    statistic is the candidate's number of passed runs over all tasks. In one task it
+    follows the hypergeometric distribution, and the tasks are independent. The p-value
+    is the chance of a total at least as far from its mean as the observed one."""
+    return _permutation(base_runs, candidate_runs)[1]
+
+
+def _permutation(
+    base_runs: Sequence[Sequence[bool]], candidate_runs: Sequence[Sequence[bool]]
+) -> tuple[Fraction, float]:
+    """The candidate's passed runs minus their mean under the null, and the p-value."""
+    counts, total, obs, shift = [1], 1, 0, Fraction(0)
+    for b, c in zip(base_runs, candidate_runs, strict=True):
+        nb, nc = len(b), len(c)
+        if not nb or not nc:
+            raise ValueError("every task needs at least one run of each harness")
+        k = sum(map(bool, b)) + sum(map(bool, c))
+        shift += sum(map(bool, c)) - Fraction(k * nc, nb + nc)
+        if k in (0, nb + nc):  # every relabelling gives the same count
+            continue
+        obs += sum(map(bool, c))
+        task = [comb(k, x) * comb(nb + nc - k, nc - x) for x in range(nc + 1)]
+        new = [0] * (len(counts) + nc)
+        for i, a in enumerate(counts):
+            for x, w in enumerate(task):
+                new[i + x] += a * w
+        counts, total = new, total * comb(nb + nc, nc)
+    mean = obs - shift
+    extreme = sum(n for x, n in enumerate(counts) if abs(x - mean) >= abs(shift))
+    return shift, extreme / total
 
 
 def gate_failures(summary: dict[str, Any], gates: dict[str, tuple[str, float]]) -> list[str]:
@@ -195,6 +235,7 @@ def compare(
         diffs=d,
         level=level,
         objective=objective,
+        runs=tuple([[g.passed for g in ts[t]] for t in shared] for ts in (tb, tc)),
     )
     return c
 
@@ -210,6 +251,7 @@ def decide(
     diffs: Sequence[float] | None = None,
     level: float = 0.95,
     objective: str = "success",
+    runs: tuple[Sequence[Sequence[bool]], Sequence[Sequence[bool]]] | None = None,
 ) -> tuple[str, list[str]]:
     """The adoption rule. Without clear evidence for the candidate, keep the base.
 
@@ -223,17 +265,27 @@ def decide(
     the candidate may serve users, so a candidate below the bar is rejected. A step asks
     whether the candidate is a better base for the next change, so a bar that the base
     misses decides nothing either way: missing it too does not reject the candidate, and
-    clearing it does not adopt the candidate. The intervals decide. A bar the base clears
-    still rejects a candidate that misses it. With the default objective, a step is kept for
-    higher success only, never for lower cost alone: two runs of one harness differ in
-    tokens by sampling, and over a few dozen tasks that difference can look like a saving.
+    clearing it does not adopt the candidate. A bar the base clears still rejects a
+    candidate that misses it. With the default objective, a step is kept for higher
+    success only, never for lower cost alone: two runs of one harness differ in tokens by
+    sampling, and over a few dozen tasks that difference can look like a saving.
 
-    ``diffs`` holds the per-task success differences, candidate minus base, and
-    ``changed`` how many tasks the candidate passes more often and less often than the
-    base. To adopt for higher success, the ranks of the tasks that improve must sum to
-    more than the ranks of the tasks that get worse, and the two-sided Wilcoxon
-    signed-rank test must pass at ``level``. Without ``diffs`` the result for higher
-    success is inconclusive. Without ``changed`` the counts come from ``diffs``.
+    In a release, ``diffs`` holds the per-task success differences, candidate minus base,
+    and ``changed`` how many tasks the candidate passes more often and less often than the
+    base. To adopt for higher success, the success interval must lie above zero, the ranks
+    of the tasks that improve must sum to more than the ranks of the tasks that get worse,
+    and the two-sided Wilcoxon signed-rank test must pass at ``level``. Without ``diffs``
+    the result for higher success is inconclusive. Without ``changed`` the counts come
+    from ``diffs``.
+
+    In a step that tries to raise success, the runs decide and the success interval is
+    only reported. ``runs`` holds the pass results of each task's runs, base first, then
+    candidate, with the tasks in the same order. A task is broken when its own runs show a
+    loss that run noise gives in at most ``1 - level`` of cases: the one-sided Fisher exact
+    test on the task's passed and failed runs. Any broken task rejects the step. Otherwise
+    the step is adopted only if the candidate passes more runs than the null mean and
+    run_permutation_test() passes at ``level``. Without ``runs`` the result for higher
+    success is inconclusive.
 
     ``objective`` other than success is a lower-is-better metric in ``deltas``, such as
     ``cost_per_task``, and applies to steps only. Gates, violations and guardrails apply
@@ -261,7 +313,8 @@ def decide(
         ]
     _, (lo, hi) = deltas["success"]
     m = usecase.margin
-    worse = [f"success is lower: {lo:+.3f} to {hi:+.3f}"] if hi < -m else []
+    runs_decide = step and objective == "success"  # the success interval is only reported
+    worse = [f"success is lower: {lo:+.3f} to {hi:+.3f}"] if hi < -m and not runs_decide else []
     unsure = []
     for name, (op, limit) in usecase.guardrails.items():
         own = name == objective != "success"  # the objective decides its own direction
@@ -280,6 +333,8 @@ def decide(
         return "reject", worse
     if objective != "success":
         return _objective_step(objective, deltas, (lo, hi), m, unsure, below)
+    if step:
+        return _success_step(deltas["success"], runs, level, unsure, below)
     cost = deltas.get("cost_per_task")
     known = not (sb.get("unknown_cost") or sc.get("unknown_cost"))
     if lo > 0:
@@ -364,6 +419,68 @@ def _objective_step(
     if unsure:
         return "inconclusive", [f"{win}, but a guardrail may break; keep the base", held, *unsure]
     return "adopt", [win, held, *below]
+
+
+def _success_step(
+    success: Delta,
+    runs: tuple[Sequence[Sequence[bool]], Sequence[Sequence[bool]]] | None,
+    level: float,
+    unsure: list[str],
+    below: list[str],
+) -> tuple[str, list[str]]:
+    """The end of decide() for a step that tries to raise success."""
+    d, (lo, hi) = success
+    gain = f"success is higher by {d:+.3f} (interval {lo:+.3f} to {hi:+.3f})"
+    if runs is None:
+        return "inconclusive", [
+            f"success changes by {d:+.3f}, but the run results of each task are missing;"
+            " keep the base",
+            *unsure,
+        ]
+    rates = [
+        (Fraction(sum(map(bool, b)), len(b)), Fraction(sum(map(bool, c)), len(c)))
+        for b, c in zip(*runs, strict=True)
+    ]
+    if broken := sum(_fisher_loss(b, c) <= 1 - level for b, c in zip(*runs, strict=True)):
+        return "reject", [
+            f"{broken} task{'s fail' if broken != 1 else ' fails'} runs"
+            f" {'they' if broken != 1 else 'it'} passed with the base, by more than run noise"
+            " explains; keep the base"
+        ]
+    shift, p = _permutation(*runs)
+    better, worse = sum(rc > rb for rb, rc in rates), sum(rc < rb for rb, rc in rates)
+    counts = f"{better} task{'s' * (better != 1)} better, {worse} worse, " + (
+        f"p = {p:.3f}" if p >= 0.001 else "p < 0.001"
+    )
+    if shift <= 0:
+        return "inconclusive", [
+            f"success difference {lo:+.3f} to {hi:+.3f} does not establish a benefit;"
+            " keep the base",
+            *unsure,
+        ]
+    if p > 1 - level:
+        return "inconclusive", [
+            f"{gain}, but the difference between runs does not support the gain: {counts};"
+            " keep the base",
+            *unsure,
+        ]
+    win = f"{gain}: {counts}"
+    if unsure:
+        return "inconclusive", [f"{win}, but a guardrail may break; keep the base", *unsure]
+    return "adopt", [win, *below]
+
+
+def _fisher_loss(base: Sequence[bool], candidate: Sequence[bool]) -> Fraction:
+    """The one-sided Fisher exact p-value that one task's candidate runs pass fewer times
+    than its base runs: the chance that the task's passed runs, dealt at random between
+    the two harnesses, leave the candidate this few or fewer."""
+    nb, nc = len(base), len(candidate)
+    if not nb or not nc:
+        raise ValueError("every task needs at least one run of each harness")
+    c = sum(map(bool, candidate))
+    k = sum(map(bool, base)) + c
+    low = sum(comb(k, x) * comb(nb + nc - k, nc - x) for x in range(c + 1))
+    return Fraction(low, comb(nb + nc, nc))
 
 
 def _num(name: str, v: float) -> str:

@@ -27,9 +27,9 @@ and where each one fails.
 ## Install
 
 ```bash
-uv add "harness-evals @ git+https://github.com/slavadubrov/harness-evals@v0.8.0"
+uv add "harness-evals @ git+https://github.com/slavadubrov/harness-evals@v0.9.0"
 # or
-pip install "git+https://github.com/slavadubrov/harness-evals@v0.8.0"
+pip install "git+https://github.com/slavadubrov/harness-evals@v0.9.0"
 ```
 
 ## Quickstart
@@ -38,7 +38,7 @@ The example runs offline in a second. It is in the repository, not in the instal
 package:
 
 ```bash
-git clone --depth 1 --branch v0.8.0 https://github.com/slavadubrov/harness-evals
+git clone --depth 1 --branch v0.9.0 https://github.com/slavadubrov/harness-evals
 cd harness-evals
 uv run python examples/refund_desk.py out
 ```
@@ -354,7 +354,8 @@ rule decides. This check does not validate bootstrap coverage for other cases.
 diffs=diffs)` applies the rule to them. `diffs` is the per-task success difference,
 candidate minus base. Pass it to decide on a success gain. If it is missing, the evidence
 for that gain is inconclusive. The counts appear in the reasons; without them, `decide`
-counts them from `diffs`. `compare()` supplies both.
+counts them from `diffs`. A step uses the run results of each task instead (`runs`, see
+below). `compare()` supplies all of them.
 
 ### One step of an improvement loop
 
@@ -365,30 +366,76 @@ each one still misses the bar, and the loop never moves.
 
 `compare(usecase, base, candidate, step=True)` decides a step. A gate that the base
 misses decides nothing either way: a candidate that misses it too is not rejected, and a
-candidate that clears it is not adopted for that alone (rule 2 is off). The intervals of
-rules 3 to 5 decide whether it is better, and the reasons say when it is still below the
-bar. A gate that the base
-clears still rejects a candidate that misses it, as does an increase in the number of
-runs with a critical violation.
-Decide the release with the default rule when the loop is done, on tasks it has not
-used.
+candidate that clears it is not adopted for that alone (rule 2 is off). The reasons say
+when it is still below the bar. A gate that the base clears still rejects a candidate
+that misses it, as does an increase in the number of runs with a critical violation. The
+minimum of six tasks and the guardrail limits of rule 3 apply as in a release. Decide the
+release with the default rule when the loop is done, on tasks it has not used.
 
-A step requires a positive paired success interval, a Wilcoxon signed-rank test that
-favours the candidate, and satisfied guardrails. At the default 95% level, 4 better and
-0 worse gives p = 0.125, and 6 better and 2 worse of equal size gives p = 0.289. Six
-better and 0 worse gives p = 0.03125 and passes. So do 6 tasks that go from 0 of 3 runs to
-3 of 3 against 1 task that loses one run of three (p = 0.031). Count tasks with room to
-improve when designing the validation set for a focused change. The
-[saved support campaign](https://github.com/slavadubrov/agent-harness-lab-public/blob/main/reports/part-5/support-sign-test/REPORT.md)
-ran under the sign test and kept none of its three candidates: 6 better and 1 worse,
-6 better and 2 worse, and 4 better and 0 worse. The rule now uses the Wilcoxon test,
-which would adopt the first of them.
+A step that tries to raise success then asks two questions, in this order:
+
+1. **Is any task broken?** A task is broken when its own runs show a loss that run noise
+   gives in at most `1 - level` of cases. The test is the one-sided Fisher exact test on
+   the task's passed and failed runs in the two harnesses. With 3 runs on each side, only
+   a fall from 3 of 3 passed runs to 0 of 3 is broken (p = 1/20). A fall from 3 of 3 to
+   1 of 3, or from 2 of 3 to 0 of 3, gives p = 0.2 and is not. With 5 runs on each side,
+   5 to 0, 5 to 1 and 4 to 0 are broken. One broken task rejects the step.
+2. **Is the gain larger than the difference between repeated runs?** If the change does
+   nothing, the labels "base" and "candidate" can be swapped between the runs of one
+   task. `run_permutation_test(base_runs, candidate_runs)` counts the candidate's passed
+   runs over all tasks. It computes exactly how often random swaps within each task give
+   a count at least as far from its mean as the observed one. The candidate must pass
+   more runs than that mean, and p must be at most `1 - level`. Otherwise the step is
+   inconclusive.
+
+A guardrail that may break still makes the step inconclusive. The success interval over
+tasks is computed and shown in the reasons, but it does not decide a step. `decide` needs
+the pass results of each task's runs for this: `runs=(base_runs, candidate_runs)`, one
+list of booleans per task, in the same task order. `compare()` supplies them. Without
+them, a success gain in a step is inconclusive.
+
+A step does not count tasks. A release is a claim about new tasks: the candidate will do
+better on requests nobody has tried yet. That claim needs many tasks, so a release keeps
+the interval and the Wilcoxon test over tasks. A step only needs to know that the gain on
+these tasks is real, so that the next change starts from a better harness. The noise to
+beat is then the difference between repeated runs of the same tasks. The six cases below
+use 32 tasks with 3 runs each. The unchanged tasks pass every run or none, except two
+that pass 2 and 1 of their 3 runs.
+
+| Case | Change                                          | Step                     | Release      |
+| ---- | ----------------------------------------------- | ------------------------ | ------------ |
+| (a)  | 4 tasks go from 0 of 3 to 3 of 3                | adopt, p < 0.001         | inconclusive |
+| (b)  | 8 tasks go from 0 of 3 to 3 of 3, 4 from 3 to 0 | reject, 4 broken tasks   | inconclusive |
+| (c)  | 12 tasks go from 0 of 3 to 1 of 3               | adopt, p = 0.003         | adopt        |
+| (d)  | 6 tasks go from 0 of 3 to 3 of 3, 1 from 3 to 2 | adopt, p < 0.001         | adopt        |
+| (e)  | 6 tasks go from 0 of 3 to 3 of 3, 2 from 3 to 0 | reject, 2 broken tasks   | inconclusive |
+| (f)  | 1 task goes from 2 of 3 to 3 of 3               | inconclusive, p = 1.000  | inconclusive |
+| (g)  | 6 tasks go from 0 of 3 to 3 of 3, 1 from 3 to 1 | adopt, p < 0.001         | adopt        |
+
+The p-value also counts the runs of the tasks that did not change. A task that passes 1
+or 2 of its 3 runs in both harnesses adds to the noise. If 16 of the 32 tasks pass 1 or
+2 of 3 runs, the four gains of case (a) give p = 0.053, and the step is inconclusive.
+
+Two runs of one harness should give inconclusive. In a simulation, two runs of one
+harness on 32 tasks with 3 runs per task were compared 1000 times for each setting of the
+tasks' pass probabilities:
+
+| Pass probabilities of the 32 tasks                   | Adopted     | Rejected, broken task |
+| ---------------------------------------------------- | ----------- | --------------------- |
+| drawn once from 0 to 1                               | 14 (1.4%)   | 199 (19.9%)           |
+| 12 at 0.05, 14 at 0.95, 3 at 0, 3 at 1               | 13 (1.3%)   | 5 (0.5%)              |
+| all 0.5                                              | 19 (1.9%)   | 380 (38.0%)           |
+
+A task with a pass rate near 0.5 sometimes loses all three runs by chance. Before a
+campaign, run the base twice and compare the two runs with the step rule. If the step
+rule rejects, add runs per task, or remove tasks that pass about half of their runs.
 
 With the default objective, a step cannot adopt a change for cost alone. Two runs of one
 harness can differ in token use by sampling. Run the base twice with fresh samples and
 compare them with the step rule. The answer should be inconclusive.
 
-`level` sets the confidence level of the paired intervals, 0.95 by default. For K
+`level` sets the confidence level of the paired intervals, 0.95 by default, and a step's
+permutation test must give p at most `1 - level`. For K
 proposals, repeat the comparisons at `level=1 - 0.05 / K` to see which decisions still
 hold. If earlier validation results influenced later proposals, this stricter threshold
 does not establish a 5% error rate across the search. Assess the selected harness on
