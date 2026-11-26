@@ -3,7 +3,8 @@ import random
 import statistics
 import subprocess
 import sys
-from itertools import product
+from fractions import Fraction
+from itertools import combinations, product
 from math import isclose
 from pathlib import Path
 
@@ -36,6 +37,7 @@ from harness_evals import (
     pass_at_k,
     pass_hat_k,
     run,
+    run_permutation_test,
     save,
     says,
     sign_test,
@@ -1229,7 +1231,10 @@ def test_a_step_does_not_adopt_a_candidate_only_for_clearing_a_bar_the_base_miss
     )
     assert compare(*worse).decision == "adopt"  # a release replaces a base below the bar
     c = compare(*worse, step=True)
-    assert c.ci[1] < 0 and c.decision == "reject" and c.reasons[0].startswith("success is lower")
+    assert c.ci[1] < 0 and c.decision == "reject"
+    assert c.reasons == [
+        "6 of 10 tasks pass less often than with the base by more than 0.5; keep the base"
+    ]
 
     # Fast enough and more successful, but ten times the cost past a guardrail.
     uc, gb, gc = too_slow_base(
@@ -1331,21 +1336,25 @@ def test_rank_sums_must_favor_the_candidate():
     # size, the eighteen small losses still sum to more than the six gains.
     uc, base = grades_for({f"t{i}": [i < 18] + [False] * 19 for i in range(24)}, "base")
     _, candidate = grades_for({f"t{i}": [i >= 18] * 20 for i in range(24)}, "candidate")
-    c = compare(uc, base, candidate, step=True)
+    c = compare(uc, base, candidate)
     assert c.ci[0] > 0 and wilcoxon_test([1.0] * 6 + [-0.05] * 18) > 0.05
     assert c.decision == "inconclusive" and "6 better, 18 worse" in c.reasons[0]
+    # A step counts runs: 120 more passed runs against 18 fewer, and no task is broken.
+    assert compare(uc, base, candidate, step=True).decision == "adopt"
 
 
-@pytest.mark.parametrize("step", [False, True])
-def test_decide_requires_task_differences_to_adopt_for_higher_success(step):
+def test_decide_requires_task_differences_to_adopt_for_higher_success():
     uc = UseCase("u", [])
     summary = {"tasks": 36, "violations": 0}
     deltas = {"success": (0.04, (0.01, 0.07))}
-    decision, reasons = decide(uc, summary, summary, deltas, step=step, changed=(6, 0))
+    decision, reasons = decide(uc, summary, summary, deltas, changed=(6, 0))
     assert decision == "inconclusive" and "paired task differences are missing" in reasons[0]
     four, six = [1.0] * 4 + [0.0] * 32, [1.0] * 6 + [0.0] * 30
-    assert decide(uc, summary, summary, deltas, step=step, diffs=four)[0] == "inconclusive"
-    assert decide(uc, summary, summary, deltas, step=step, diffs=six)[0] == "adopt"
+    assert decide(uc, summary, summary, deltas, diffs=four)[0] == "inconclusive"
+    assert decide(uc, summary, summary, deltas, diffs=six)[0] == "adopt"
+    # A step needs the run results instead.
+    decision, reasons = decide(uc, summary, summary, deltas, step=True, diffs=six)
+    assert decision == "inconclusive" and "run results of each task are missing" in reasons[0]
 
 
 def test_wilcoxon_test_matches_hand_computed_values():
@@ -1386,11 +1395,11 @@ def test_decide_weighs_the_size_of_each_change():
     uc, s = UseCase("u", []), {"tasks": 32, "violations": 0}
     deltas = {"success": (0.15, (0.05, 0.25))}
     # Six tasks go from 0 of 3 runs to 3 of 3; one loses one run of three.
-    decision, reasons = decide(uc, s, s, deltas, step=True, diffs=[1.0] * 6 + [-1 / 3])
+    decision, reasons = decide(uc, s, s, deltas, diffs=[1.0] * 6 + [-1 / 3])
     assert decision == "adopt" and sign_test(6, 1) == 0.125
-    decision, reasons = decide(uc, s, s, deltas, step=True, diffs=[1.0] * 4)
+    decision, reasons = decide(uc, s, s, deltas, diffs=[1.0] * 4)
     assert decision == "inconclusive" and "4 better, 0 worse, p = 0.125" in reasons[0]
-    decision, reasons = decide(uc, s, s, deltas, step=True, diffs=[1.0] * 6 + [-1.0] * 2)
+    decision, reasons = decide(uc, s, s, deltas, diffs=[1.0] * 6 + [-1.0] * 2)
     assert decision == "inconclusive" and "6 better, 2 worse, p = 0.289" in reasons[0]
 
 
@@ -1411,8 +1420,124 @@ def test_two_runs_of_one_harness_are_rarely_adopted():
             for p in probs
         ]
         deltas = {"success": (statistics.fmean(d), bootstrap(d, seed=rep))}
-        adopted += decide(uc, s, s, deltas, step=True, diffs=d)[0] == "adopt"
+        adopted += decide(uc, s, s, deltas, diffs=d)[0] == "adopt"
     assert adopted / reps <= 0.025 + 3 * (0.025 * 0.975 / reps) ** 0.5
+
+
+# -- the step rule: no broken task, and a gain larger than the noise between runs -----------
+
+ZERO3, ALL3 = [False] * 3, [True] * 3
+
+
+def test_the_run_permutation_test_matches_hand_computed_values():
+    # One task: 3 passed runs of 6 fall on the candidate's 3 in 1 of C(6, 3) = 20 ways.
+    assert run_permutation_test([ZERO3], [ALL3]) == 2 / 20 == 0.1
+    assert run_permutation_test([ZERO3] * 4, [ALL3] * 4) == 2 / 20**4
+    assert run_permutation_test([ZERO3] * 3, [ALL3] * 3) == 2 / 20**3
+    # Tasks that pass or fail every run on both sides add nothing.
+    assert run_permutation_test([ZERO3] * 4 + [ALL3] * 9, [ALL3] * 13) == 2 / 20**4
+    same = [[True, False, False], [True, True, False], ZERO3, ALL3]
+    assert run_permutation_test(same, same) == 1.0
+    assert run_permutation_test([ALL3], [ZERO3]) == 0.1  # two-sided
+    with pytest.raises(ValueError):
+        run_permutation_test([[]], [ALL3])
+
+
+def test_the_run_permutation_test_matches_every_relabelling():
+    rng = random.Random(5)
+    for _ in range(30):
+        tasks = rng.randint(1, 3)
+        base = [[rng.random() < 0.5 for _ in range(rng.randint(1, 3))] for _ in range(tasks)]
+        cand = [[rng.random() < 0.6 for _ in range(rng.randint(1, 4))] for _ in range(tasks)]
+        # Every way to choose which of a task's pooled runs are the candidate's, per task.
+        pooled = [b + c for b, c in zip(base, cand, strict=True)]
+        choices = [combinations(range(len(p)), len(c)) for p, c in zip(pooled, cand, strict=True)]
+        totals = [
+            sum(sum(p[i] for i in pick) for p, pick in zip(pooled, picks, strict=True))
+            for picks in product(*choices)
+        ]
+        mean, obs = Fraction(sum(totals), len(totals)), sum(sum(c) for c in cand)
+        far = sum(abs(t - mean) >= abs(obs - mean) for t in totals)
+        assert isclose(run_permutation_test(base, cand), far / len(totals))
+
+
+def _step_case(changes):
+    """32 tasks with 3 runs. Task i passes (3, 3, 3, 0)[i % 4] runs in both harnesses,
+    except tasks 2 and 6, which pass 2 and 1, and the tasks in ``changes``, which map to
+    (base passes, candidate passes)."""
+    base, cand = {}, {}
+    for i in range(32):
+        same = {2: 2, 6: 1}.get(i, (3, 3, 3, 0)[i % 4])
+        b, c = changes.get(i, (same, same))
+        base[f"t{i:02}"] = [True] * b + [False] * (3 - b)
+        cand[f"t{i:02}"] = [True] * c + [False] * (3 - c)
+    uc, gb = grades_for(base, "base")
+    return uc, gb, grades_for(cand, "cand")[1]
+
+
+ZEROS, THREES, ONES = range(3, 32, 4), range(0, 32, 4), range(1, 32, 4)
+STEP_CASES = {  # name: (changes, step decision, release decision)
+    "a": ({i: (0, 3) for i in ZEROS[:4]}, "adopt", "inconclusive"),
+    "b": (
+        {**{i: (0, 3) for i in ZEROS}, **{i: (3, 0) for i in THREES[:4]}},
+        "reject",
+        "inconclusive",
+    ),
+    "c": ({**{i: (0, 1) for i in ZEROS}, **{i: (0, 1) for i in ONES[:4]}}, "adopt", "adopt"),
+    "d": ({**{i: (0, 3) for i in ZEROS[:6]}, 0: (3, 2)}, "adopt", "adopt"),
+    "e": ({**{i: (0, 3) for i in ZEROS[:6]}, 0: (3, 0), 4: (3, 0)}, "reject", "inconclusive"),
+    "f": ({10: (2, 3)}, "inconclusive", "inconclusive"),
+}
+
+
+@pytest.mark.parametrize("name", STEP_CASES)
+def test_a_step_counts_runs_and_a_release_counts_tasks(name):
+    changes, step, release = STEP_CASES[name]
+    case = _step_case(changes)
+    c = compare(*case, step=True)
+    assert c.decision == step, c.reasons
+    assert compare(*case).decision == release
+    if step == "reject":
+        broken = sum(b - c > 1.5 for b, c in changes.values())
+        assert c.reasons == [
+            f"{broken} of 32 tasks pass less often than with the base by more than 0.5;"
+            " keep the base"
+        ]
+
+
+def test_the_step_reasons_give_the_counts_and_p():
+    c = compare(*_step_case(STEP_CASES["a"][0]), step=True)
+    assert c.reasons[0].startswith("success is higher by +0.125 (interval +0.")
+    assert c.reasons[0].endswith(": 4 tasks better, 0 worse, p < 0.001")
+    c = compare(*_step_case(STEP_CASES["f"][0]), step=True)
+    assert c.reasons[0].endswith(
+        "but the difference between runs does not support the gain:"
+        " 1 task better, 0 worse, p = 1.000; keep the base"
+    )
+    # A task that falls from 3 of 3 to 1 of 3 is broken; with a higher limit it is not.
+    case = _step_case({**{i: (0, 3) for i in ZEROS[:6]}, 0: (3, 1)})
+    assert compare(*case, step=True).decision == "reject"
+    assert compare(*case, step=True, max_task_loss=0.7).decision == "adopt"
+    with pytest.raises(ValueError):
+        compare(*case, step=True, max_task_loss=-0.1)
+
+
+def test_two_runs_of_one_harness_are_rarely_adopted_by_the_step_rule():
+    # 32 tasks with pass probabilities drawn once from [0, 1], 3 runs per task, run twice.
+    # Measured: 8 of 1000 adopted (0.8%) and 869 of 1000 rejected (86.9%), because a task
+    # near 0.5 often loses two of three runs by chance and counts as broken.
+    rng = random.Random(7)
+    probs = [rng.random() for _ in range(32)]
+    uc, s = UseCase("u", []), {"tasks": 32, "violations": 0}
+    reps, got = 1000, []
+    for rep in range(reps):
+        r = random.Random(rep)
+        runs = tuple([[r.random() < p for _ in range(3)] for p in probs] for _ in range(2))
+        d = sum(sum(c) - sum(b) for b, c in zip(*runs, strict=True)) / 96
+        # The interval does not decide a step, so a point stands in for it.
+        got.append(decide(uc, s, s, {"success": (d, (d, d))}, step=True, runs=runs)[0])
+    assert got.count("adopt") / reps <= 0.025 + 3 * (0.025 * 0.975 / reps) ** 0.5
+    assert (got.count("adopt"), got.count("reject")) == (8, 869)
 
 
 # -- a step that optimizes cost, latency or tokens ------------------------------------------
