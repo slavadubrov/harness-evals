@@ -1433,14 +1433,15 @@ ZERO3, ALL3 = [False] * 3, [True] * 3
 
 def test_the_run_permutation_test_matches_hand_computed_values():
     # One task: 3 passed runs of 6 fall on the candidate's 3 in 1 of C(6, 3) = 20 ways.
-    assert run_permutation_test([ZERO3], [ALL3]) == 2 / 20 == 0.1
-    assert run_permutation_test([ZERO3] * 4, [ALL3] * 4) == 2 / 20**4
-    assert run_permutation_test([ZERO3] * 3, [ALL3] * 3) == 2 / 20**3
+    assert run_permutation_test([ZERO3], [ALL3]) == 1 / 20
+    assert run_permutation_test([ZERO3] * 2, [ALL3] * 2) == 1 / 400
+    assert run_permutation_test([ZERO3] * 4, [ALL3] * 4) == 1 / 20**4
+    # 5 passed runs of 6: the candidate has all 3 in 10 of 20 ways.
+    assert run_permutation_test([[True, True, False]], [ALL3]) == 10 / 20 == 0.5
     # Tasks that pass or fail every run on both sides add nothing.
-    assert run_permutation_test([ZERO3] * 4 + [ALL3] * 9, [ALL3] * 13) == 2 / 20**4
-    same = [[True, False, False], [True, True, False], ZERO3, ALL3]
-    assert run_permutation_test(same, same) == 1.0
-    assert run_permutation_test([ALL3], [ZERO3]) == 0.1  # two-sided
+    assert run_permutation_test([ZERO3] * 4 + [ALL3] * 9, [ALL3] * 13) == 1 / 20**4
+    assert run_permutation_test([ZERO3, ALL3], [ZERO3, ALL3]) == 1.0
+    assert run_permutation_test([ALL3], [ZERO3]) == 1.0  # one-sided: a loss is not a gain
     with pytest.raises(ValueError):
         run_permutation_test([[]], [ALL3])
 
@@ -1458,9 +1459,10 @@ def test_the_run_permutation_test_matches_every_relabelling():
             sum(sum(p[i] for i in pick) for p, pick in zip(pooled, picks, strict=True))
             for picks in product(*choices)
         ]
-        mean, obs = Fraction(sum(totals), len(totals)), sum(sum(c) for c in cand)
-        far = sum(abs(t - mean) >= abs(obs - mean) for t in totals)
-        assert isclose(run_permutation_test(base, cand), far / len(totals))
+        obs = sum(sum(c) for c in cand)
+        assert isclose(
+            run_permutation_test(base, cand), Fraction(sum(t >= obs for t in totals), len(totals))
+        )
 
 
 def _step_case(changes):
@@ -1490,6 +1492,7 @@ STEP_CASES = {  # name: (changes, step decision, release decision)
     "e": ({**{i: (0, 3) for i in ZEROS[:6]}, 0: (3, 0), 4: (3, 0)}, "reject", "inconclusive"),
     "f": ({10: (2, 3)}, "inconclusive", "inconclusive"),
     "g": ({**{i: (0, 3) for i in ZEROS[:6]}, 0: (3, 1)}, "adopt", "adopt"),
+    "h": ({3: (0, 3), 2: (3, 3), 6: (3, 3)}, "adopt", "inconclusive"),  # no mixed task
 }
 
 
@@ -1515,7 +1518,7 @@ def test_the_step_reasons_give_the_counts_and_p():
     c = compare(*_step_case(STEP_CASES["f"][0]), step=True)
     assert c.reasons[0].endswith(
         "but the difference between runs does not support the gain:"
-        " 1 task better, 0 worse, p = 1.000; keep the base"
+        " 1 task better, 0 worse, p = 0.500; keep the base"
     )
     # A loss of two runs of three is within noise for one task, but it is still counted.
     c = compare(*_step_case(STEP_CASES["g"][0]), step=True)
@@ -1540,9 +1543,9 @@ def test_a_task_is_broken_when_the_fisher_test_rejects_noise():
 
 
 NOISE = {  # pass probabilities of 32 tasks: (adopted, rejected) in 1000 pairs of one harness
-    "uniform": ([r.random() for r in [random.Random(7)] for _ in range(32)], (14, 199)),
-    "near 0 or 1": ([0.05] * 12 + [0.95] * 14 + [0.0] * 3 + [1.0] * 3, (13, 5)),
-    "all 0.5": ([0.5] * 32, (19, 380)),
+    "uniform": ([r.random() for r in [random.Random(7)] for _ in range(32)], (31, 199)),
+    "near 0 or 1": ([0.05] * 12 + [0.95] * 14 + [0.0] * 3 + [1.0] * 3, (20, 5)),
+    "all 0.5": ([0.5] * 32, (33, 380)),
 }
 
 
@@ -1559,7 +1562,7 @@ def test_two_runs_of_one_harness_are_rarely_adopted_by_the_step_rule(setting):
         d = sum(sum(c) - sum(b) for b, c in zip(*runs, strict=True)) / 96
         # The interval does not decide a step, so a point stands in for it.
         got.append(decide(uc, s, s, {"success": (d, (d, d))}, step=True, runs=runs)[0])
-    assert got.count("adopt") / reps <= 0.025 + 3 * (0.025 * 0.975 / reps) ** 0.5
+    assert got.count("adopt") / reps <= 0.05 + 3 * (0.05 * 0.95 / reps) ** 0.5
     assert (got.count("adopt"), got.count("reject")) == expected
 
 

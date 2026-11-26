@@ -27,9 +27,9 @@ and where each one fails.
 ## Install
 
 ```bash
-uv add "harness-evals @ git+https://github.com/slavadubrov/harness-evals@v0.9.0"
+uv add "harness-evals @ git+https://github.com/slavadubrov/harness-evals@v0.9.1"
 # or
-pip install "git+https://github.com/slavadubrov/harness-evals@v0.9.0"
+pip install "git+https://github.com/slavadubrov/harness-evals@v0.9.1"
 ```
 
 ## Quickstart
@@ -38,7 +38,7 @@ The example runs offline in a second. It is in the repository, not in the instal
 package:
 
 ```bash
-git clone --depth 1 --branch v0.9.0 https://github.com/slavadubrov/harness-evals
+git clone --depth 1 --branch v0.9.1 https://github.com/slavadubrov/harness-evals
 cd harness-evals
 uv run python examples/refund_desk.py out
 ```
@@ -383,10 +383,12 @@ A step that tries to raise success then asks two questions, in this order:
 2. **Is the gain larger than the difference between repeated runs?** If the change does
    nothing, the labels "base" and "candidate" can be swapped between the runs of one
    task. `run_permutation_test(base_runs, candidate_runs)` counts the candidate's passed
-   runs over all tasks. It computes exactly how often random swaps within each task give
-   a count at least as far from its mean as the observed one. The candidate must pass
-   more runs than that mean, and p must be at most `1 - level`. Otherwise the step is
-   inconclusive.
+   runs over all tasks. The test is one-sided: it computes exactly how often random swaps
+   within each task, which is what an edit that changes nothing gives, leave the
+   candidate at least as many passed runs as it has. The candidate must pass more runs
+   than the mean of those swaps, and p must be at most `1 - level`. Otherwise the step is
+   inconclusive. One task that goes from 0 of 3 to 3 of 3 gives p = 1/20, the same value
+   at which one task that goes from 3 of 3 to 0 of 3 counts as broken.
 
 A guardrail that may break still makes the step inconclusive. The success interval over
 tasks is computed and shown in the reasons, but it does not decide a step. `decide` needs
@@ -398,23 +400,24 @@ A step does not count tasks. A release is a claim about new tasks: the candidate
 better on requests nobody has tried yet. That claim needs many tasks, so a release keeps
 the interval and the Wilcoxon test over tasks. A step only needs to know that the gain on
 these tasks is real, so that the next change starts from a better harness. The noise to
-beat is then the difference between repeated runs of the same tasks. The six cases below
+beat is then the difference between repeated runs of the same tasks. The cases below
 use 32 tasks with 3 runs each. The unchanged tasks pass every run or none, except two
-that pass 2 and 1 of their 3 runs.
+that pass 2 and 1 of their 3 runs. In case (h) those two tasks also pass every run.
 
 | Case | Change                                          | Step                     | Release      |
 | ---- | ----------------------------------------------- | ------------------------ | ------------ |
 | (a)  | 4 tasks go from 0 of 3 to 3 of 3                | adopt, p < 0.001         | inconclusive |
 | (b)  | 8 tasks go from 0 of 3 to 3 of 3, 4 from 3 to 0 | reject, 4 broken tasks   | inconclusive |
-| (c)  | 12 tasks go from 0 of 3 to 1 of 3               | adopt, p = 0.003         | adopt        |
+| (c)  | 12 tasks go from 0 of 3 to 1 of 3               | adopt, p = 0.002         | adopt        |
 | (d)  | 6 tasks go from 0 of 3 to 3 of 3, 1 from 3 to 2 | adopt, p < 0.001         | adopt        |
 | (e)  | 6 tasks go from 0 of 3 to 3 of 3, 2 from 3 to 0 | reject, 2 broken tasks   | inconclusive |
-| (f)  | 1 task goes from 2 of 3 to 3 of 3               | inconclusive, p = 1.000  | inconclusive |
+| (f)  | 1 task goes from 2 of 3 to 3 of 3               | inconclusive, p = 0.500  | inconclusive |
 | (g)  | 6 tasks go from 0 of 3 to 3 of 3, 1 from 3 to 1 | adopt, p < 0.001         | adopt        |
+| (h)  | 1 task goes from 0 of 3 to 3 of 3               | adopt, p = 0.050         | inconclusive |
 
 The p-value also counts the runs of the tasks that did not change. A task that passes 1
-or 2 of its 3 runs in both harnesses adds to the noise. If 16 of the 32 tasks pass 1 or
-2 of 3 runs, the four gains of case (a) give p = 0.053, and the step is inconclusive.
+or 2 of its 3 runs in both harnesses adds to the noise. With the two such tasks of the
+other cases, the single gain of case (h) gives p = 0.18, and the step is inconclusive.
 
 Two runs of one harness should give inconclusive. In a simulation, two runs of one
 harness on 32 tasks with 3 runs per task were compared 1000 times for each setting of the
@@ -422,11 +425,13 @@ tasks' pass probabilities:
 
 | Pass probabilities of the 32 tasks                   | Adopted     | Rejected, broken task |
 | ---------------------------------------------------- | ----------- | --------------------- |
-| drawn once from 0 to 1                               | 14 (1.4%)   | 199 (19.9%)           |
-| 12 at 0.05, 14 at 0.95, 3 at 0, 3 at 1               | 13 (1.3%)   | 5 (0.5%)              |
-| all 0.5                                              | 19 (1.9%)   | 380 (38.0%)           |
+| drawn once from 0 to 1                               | 31 (3.1%)   | 199 (19.9%)           |
+| 12 at 0.05, 14 at 0.95, 3 at 0, 3 at 1               | 20 (2.0%)   | 5 (0.5%)              |
+| all 0.5                                              | 33 (3.3%)   | 380 (38.0%)           |
 
-A task with a pass rate near 0.5 sometimes loses all three runs by chance. Before a
+At the default level, the one-sided test adopts noise in at most 5% of pairs; with 3 runs
+per task the measured rates are lower. A task with a pass rate near 0.5 sometimes loses
+all three runs by chance. Before a
 campaign, run the base twice and compare the two runs with the step rule. If the step
 rule rejects, add runs per task, or remove tasks that pass about half of their runs.
 
