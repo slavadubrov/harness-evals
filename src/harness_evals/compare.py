@@ -79,14 +79,15 @@ def _wilcoxon(diffs: Sequence[float]) -> tuple[int, int, float]:
 def run_permutation_test(
     base_runs: Sequence[Sequence[bool]], candidate_runs: Sequence[Sequence[bool]]
 ) -> float:
-    """The exact two-sided p-value of a stratified permutation test over runs.
+    """The exact one-sided p-value of a stratified permutation test over runs.
 
     ``base_runs[i]`` and ``candidate_runs[i]`` hold the pass results of task i's runs in
     each harness; the two may have different numbers of runs. If the change does nothing,
     the labels base and candidate can be swapped between the runs of one task. The
     statistic is the candidate's number of passed runs over all tasks. In one task it
     follows the hypergeometric distribution, and the tasks are independent. The p-value
-    is the chance of a total at least as far from its mean as the observed one."""
+    is the chance that a change that does nothing gives the candidate at least as many
+    passed runs as it has."""
     return _permutation(base_runs, candidate_runs)[1]
 
 
@@ -110,9 +111,7 @@ def _permutation(
             for x, w in enumerate(task):
                 new[i + x] += a * w
         counts, total = new, total * comb(nb + nc, nc)
-    mean = obs - shift
-    extreme = sum(n for x, n in enumerate(counts) if abs(x - mean) >= abs(shift))
-    return shift, extreme / total
+    return shift, sum(counts[obs:]) / total
 
 
 def gate_failures(summary: dict[str, Any], gates: dict[str, tuple[str, float]]) -> list[str]:
