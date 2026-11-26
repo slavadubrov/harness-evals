@@ -162,7 +162,6 @@ def compare(
     step: bool = False,
     level: float = 0.95,
     objective: str = "success",
-    max_task_loss: float = 0.5,
 ) -> Comparison:
     """Pair the harnesses task by task: both ran the same tasks, so per-task differences
     cancel the variation that comes from task difficulty. Every compared metric gets a
@@ -174,8 +173,7 @@ def compare(
     ``1 - 0.05 / K`` shows which decisions still hold. With proposals chosen using earlier
     validation results, this does not guarantee a 5% campaign error rate.
 
-    ``objective`` names the metric a step tries to improve, and ``max_task_loss`` how much
-    lower a task's pass rate may be in a step; see decide()."""
+    ``objective`` names the metric a step tries to improve; see decide()."""
     if not 0 < level < 1:
         raise ValueError("level must be between 0 and 1")
     for grades in (base, candidate):
@@ -238,7 +236,6 @@ def compare(
         level=level,
         objective=objective,
         runs=tuple([[g.passed for g in ts[t]] for t in shared] for ts in (tb, tc)),
-        max_task_loss=max_task_loss,
     )
     return c
 
@@ -255,7 +252,6 @@ def decide(
     level: float = 0.95,
     objective: str = "success",
     runs: tuple[Sequence[Sequence[bool]], Sequence[Sequence[bool]]] | None = None,
-    max_task_loss: float = 0.5,
 ) -> tuple[str, list[str]]:
     """The adoption rule. Without clear evidence for the candidate, keep the base.
 
@@ -284,11 +280,12 @@ def decide(
 
     In a step that tries to raise success, the runs decide and the success interval is
     only reported. ``runs`` holds the pass results of each task's runs, base first, then
-    candidate, with the tasks in the same order. A task is broken when its pass rate in the
-    candidate is lower than in the base by more than ``max_task_loss``; any broken task
-    rejects the step. Otherwise the step is adopted only if the candidate passes more runs
-    than the null mean and run_permutation_test() passes at ``level``. Without ``runs`` the
-    result for higher success is inconclusive.
+    candidate, with the tasks in the same order. A task is broken when its own runs show a
+    loss that run noise gives in at most ``1 - level`` of cases: the one-sided Fisher exact
+    test on the task's passed and failed runs. Any broken task rejects the step. Otherwise
+    the step is adopted only if the candidate passes more runs than the null mean and
+    run_permutation_test() passes at ``level``. Without ``runs`` the result for higher
+    success is inconclusive.
 
     ``objective`` other than success is a lower-is-better metric in ``deltas``, such as
     ``cost_per_task``, and applies to steps only. Gates, violations and guardrails apply
@@ -299,8 +296,6 @@ def decide(
     _check_objective(objective, deltas, step)
     if not isfinite(usecase.margin) or usecase.margin < 0:
         raise ValueError("margin must be finite and nonnegative")
-    if not 0 <= max_task_loss <= 1:
-        raise ValueError("max_task_loss must be between 0 and 1")
     check_guardrails(usecase.guardrails, usecase.metrics)
     missed, base_missed = _missed(sc, usecase.gates), _missed(sb, usecase.gates)
     if new := [why for m, why in missed.items() if not (step and m in base_missed)]:
@@ -339,7 +334,7 @@ def decide(
     if objective != "success":
         return _objective_step(objective, deltas, (lo, hi), m, unsure, below)
     if step:
-        return _success_step(deltas["success"], runs, max_task_loss, level, unsure, below)
+        return _success_step(deltas["success"], runs, level, unsure, below)
     cost = deltas.get("cost_per_task")
     known = not (sb.get("unknown_cost") or sc.get("unknown_cost"))
     if lo > 0:
@@ -429,7 +424,6 @@ def _objective_step(
 def _success_step(
     success: Delta,
     runs: tuple[Sequence[Sequence[bool]], Sequence[Sequence[bool]]] | None,
-    max_task_loss: float,
     level: float,
     unsure: list[str],
     below: list[str],
@@ -447,10 +441,11 @@ def _success_step(
         (Fraction(sum(map(bool, b)), len(b)), Fraction(sum(map(bool, c)), len(c)))
         for b, c in zip(*runs, strict=True)
     ]
-    if broken := sum(rb - rc > max_task_loss for rb, rc in rates):
+    if broken := sum(_fisher_loss(b, c) <= 1 - level for b, c in zip(*runs, strict=True)):
         return "reject", [
-            f"{broken} of {len(rates)} tasks pass less often than with the base by more than"
-            f" {max_task_loss:g}; keep the base"
+            f"{broken} task{'s fail' if broken != 1 else ' fails'} runs"
+            f" {'they' if broken != 1 else 'it'} passed with the base, by more than run noise"
+            " explains; keep the base"
         ]
     shift, p = _permutation(*runs)
     better, worse = sum(rc > rb for rb, rc in rates), sum(rc < rb for rb, rc in rates)
@@ -473,6 +468,19 @@ def _success_step(
     if unsure:
         return "inconclusive", [f"{win}, but a guardrail may break; keep the base", *unsure]
     return "adopt", [win, *below]
+
+
+def _fisher_loss(base: Sequence[bool], candidate: Sequence[bool]) -> Fraction:
+    """The one-sided Fisher exact p-value that one task's candidate runs pass fewer times
+    than its base runs: the chance that the task's passed runs, dealt at random between
+    the two harnesses, leave the candidate this few or fewer."""
+    nb, nc = len(base), len(candidate)
+    if not nb or not nc:
+        raise ValueError("every task needs at least one run of each harness")
+    c = sum(map(bool, candidate))
+    k = sum(map(bool, base)) + c
+    low = sum(comb(k, x) * comb(nb + nc - k, nc - x) for x in range(c + 1))
+    return Fraction(low, comb(nb + nc, nc))
 
 
 def _num(name: str, v: float) -> str:

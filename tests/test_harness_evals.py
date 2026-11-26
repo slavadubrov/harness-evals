@@ -45,6 +45,7 @@ from harness_evals import (
     summarize,
     wilcoxon_test,
 )
+from harness_evals.compare import _fisher_loss
 
 REFUND = Action("refund", {"order": "A1", "cents": 4800})
 
@@ -1233,7 +1234,8 @@ def test_a_step_does_not_adopt_a_candidate_only_for_clearing_a_bar_the_base_miss
     c = compare(*worse, step=True)
     assert c.ci[1] < 0 and c.decision == "reject"
     assert c.reasons == [
-        "6 of 10 tasks pass less often than with the base by more than 0.5; keep the base"
+        "6 tasks fail runs they passed with the base, by more than run noise explains;"
+        " keep the base"
     ]
 
     # Fast enough and more successful, but ten times the cost past a guardrail.
@@ -1487,6 +1489,7 @@ STEP_CASES = {  # name: (changes, step decision, release decision)
     "d": ({**{i: (0, 3) for i in ZEROS[:6]}, 0: (3, 2)}, "adopt", "adopt"),
     "e": ({**{i: (0, 3) for i in ZEROS[:6]}, 0: (3, 0), 4: (3, 0)}, "reject", "inconclusive"),
     "f": ({10: (2, 3)}, "inconclusive", "inconclusive"),
+    "g": ({**{i: (0, 3) for i in ZEROS[:6]}, 0: (3, 1)}, "adopt", "adopt"),
 }
 
 
@@ -1498,10 +1501,10 @@ def test_a_step_counts_runs_and_a_release_counts_tasks(name):
     assert c.decision == step, c.reasons
     assert compare(*case).decision == release
     if step == "reject":
-        broken = sum(b - c > 1.5 for b, c in changes.values())
+        broken = sum((b, c) == (3, 0) for b, c in changes.values())
         assert c.reasons == [
-            f"{broken} of 32 tasks pass less often than with the base by more than 0.5;"
-            " keep the base"
+            f"{broken} tasks fail runs they passed with the base, by more than run noise"
+            " explains; keep the base"
         ]
 
 
@@ -1514,20 +1517,40 @@ def test_the_step_reasons_give_the_counts_and_p():
         "but the difference between runs does not support the gain:"
         " 1 task better, 0 worse, p = 1.000; keep the base"
     )
-    # A task that falls from 3 of 3 to 1 of 3 is broken; with a higher limit it is not.
-    case = _step_case({**{i: (0, 3) for i in ZEROS[:6]}, 0: (3, 1)})
-    assert compare(*case, step=True).decision == "reject"
-    assert compare(*case, step=True, max_task_loss=0.7).decision == "adopt"
-    with pytest.raises(ValueError):
-        compare(*case, step=True, max_task_loss=-0.1)
+    # A loss of two runs of three is within noise for one task, but it is still counted.
+    c = compare(*_step_case(STEP_CASES["g"][0]), step=True)
+    assert c.reasons[0].endswith(": 6 tasks better, 1 worse, p < 0.001")
+    c = compare(*_step_case({0: (3, 0)}), step=True)
+    assert c.reasons == [
+        "1 task fails runs it passed with the base, by more than run noise explains; keep the base"
+    ]
 
 
-def test_two_runs_of_one_harness_are_rarely_adopted_by_the_step_rule():
-    # 32 tasks with pass probabilities drawn once from [0, 1], 3 runs per task, run twice.
-    # Measured: 8 of 1000 adopted (0.8%) and 869 of 1000 rejected (86.9%), because a task
-    # near 0.5 often loses two of three runs by chance and counts as broken.
-    rng = random.Random(7)
-    probs = [rng.random() for _ in range(32)]
+def test_a_task_is_broken_when_the_fisher_test_rejects_noise():
+    def p(base, cand, n):
+        return _fisher_loss(
+            [True] * base + [False] * (n - base), [True] * cand + [False] * (n - cand)
+        )
+
+    assert p(3, 0, 3) == Fraction(1, 20)  # the only broken case with 3 runs each
+    assert p(3, 1, 3) == p(2, 0, 3) == Fraction(1, 5)
+    assert p(5, 0, 5) == Fraction(1, 252) and p(5, 1, 5) == p(4, 0, 5) == Fraction(1, 42)
+    assert p(5, 2, 5) == Fraction(1, 12)
+    assert p(1, 3, 3) == 1
+
+
+NOISE = {  # pass probabilities of 32 tasks: (adopted, rejected) in 1000 pairs of one harness
+    "uniform": ([r.random() for r in [random.Random(7)] for _ in range(32)], (14, 199)),
+    "near 0 or 1": ([0.05] * 12 + [0.95] * 14 + [0.0] * 3 + [1.0] * 3, (13, 5)),
+    "all 0.5": ([0.5] * 32, (19, 380)),
+}
+
+
+@pytest.mark.parametrize("setting", NOISE)
+def test_two_runs_of_one_harness_are_rarely_adopted_by_the_step_rule(setting):
+    # 3 runs per task, run twice. A task near 0.5 sometimes loses all three runs by chance
+    # and counts as broken, so noise alone can reject.
+    probs, expected = NOISE[setting]
     uc, s = UseCase("u", []), {"tasks": 32, "violations": 0}
     reps, got = 1000, []
     for rep in range(reps):
@@ -1537,7 +1560,7 @@ def test_two_runs_of_one_harness_are_rarely_adopted_by_the_step_rule():
         # The interval does not decide a step, so a point stands in for it.
         got.append(decide(uc, s, s, {"success": (d, (d, d))}, step=True, runs=runs)[0])
     assert got.count("adopt") / reps <= 0.025 + 3 * (0.025 * 0.975 / reps) ** 0.5
-    assert (got.count("adopt"), got.count("reject")) == (8, 869)
+    assert (got.count("adopt"), got.count("reject")) == expected
 
 
 # -- a step that optimizes cost, latency or tokens ------------------------------------------

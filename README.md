@@ -374,10 +374,12 @@ release with the default rule when the loop is done, on tasks it has not used.
 
 A step that tries to raise success then asks two questions, in this order:
 
-1. **Is any task broken?** A task is broken when its pass rate in the candidate is lower
-   than in the base by more than `max_task_loss`, 0.5 by default. With 3 runs per task, a
-   task that falls from 3 of 3 passed runs to 1 of 3 or 0 of 3 is broken. A task that
-   falls from 3 of 3 to 2 of 3 is not. One broken task rejects the step.
+1. **Is any task broken?** A task is broken when its own runs show a loss that run noise
+   gives in at most `1 - level` of cases. The test is the one-sided Fisher exact test on
+   the task's passed and failed runs in the two harnesses. With 3 runs on each side, only
+   a fall from 3 of 3 passed runs to 0 of 3 is broken (p = 1/20). A fall from 3 of 3 to
+   1 of 3, or from 2 of 3 to 0 of 3, gives p = 0.2 and is not. With 5 runs on each side,
+   5 to 0, 5 to 1 and 4 to 0 are broken. One broken task rejects the step.
 2. **Is the gain larger than the difference between repeated runs?** If the change does
    nothing, the labels "base" and "candidate" can be swapped between the runs of one
    task. `run_permutation_test(base_runs, candidate_runs)` counts the candidate's passed
@@ -408,20 +410,25 @@ that pass 2 and 1 of their 3 runs.
 | (d)  | 6 tasks go from 0 of 3 to 3 of 3, 1 from 3 to 2 | adopt, p < 0.001         | adopt        |
 | (e)  | 6 tasks go from 0 of 3 to 3 of 3, 2 from 3 to 0 | reject, 2 broken tasks   | inconclusive |
 | (f)  | 1 task goes from 2 of 3 to 3 of 3               | inconclusive, p = 1.000  | inconclusive |
+| (g)  | 6 tasks go from 0 of 3 to 3 of 3, 1 from 3 to 1 | adopt, p < 0.001         | adopt        |
 
 The p-value also counts the runs of the tasks that did not change. A task that passes 1
 or 2 of its 3 runs in both harnesses adds to the noise. If 16 of the 32 tasks pass 1 or
 2 of 3 runs, the four gains of case (a) give p = 0.053, and the step is inconclusive.
 
-Noise alone often breaks a task. In a simulation, two runs of one harness on 32 tasks,
-with pass probabilities drawn once from 0 to 1 and 3 runs per task, were compared 1000
-times. The step rule adopted 8 pairs (0.8%) and rejected 869 (86.9%) for a broken task. A
-task with a true pass rate near 0.5 often loses two of three runs by chance, and among 32
-tasks at least one usually does. A reject keeps the base, as inconclusive does, but a real
-gain is also rejected when an unrelated task loses runs by chance. Before a campaign, run
-the base twice and compare the two runs with the step rule. Adopt means the gain test is
-too easy on these tasks. Reject means the pass rates vary so much between runs that the
-broken-task check fires on noise: add runs per task.
+Two runs of one harness should give inconclusive. In a simulation, two runs of one
+harness on 32 tasks with 3 runs per task were compared 1000 times for each setting of the
+tasks' pass probabilities:
+
+| Pass probabilities of the 32 tasks                   | Adopted     | Rejected, broken task |
+| ---------------------------------------------------- | ----------- | --------------------- |
+| drawn once from 0 to 1                               | 14 (1.4%)   | 199 (19.9%)           |
+| 12 at 0.05, 14 at 0.95, 3 at 0, 3 at 1               | 13 (1.3%)   | 5 (0.5%)              |
+| all 0.5                                              | 19 (1.9%)   | 380 (38.0%)           |
+
+A task with a pass rate near 0.5 sometimes loses all three runs by chance. Before a
+campaign, run the base twice and compare the two runs with the step rule. If the step
+rule rejects, add runs per task, or remove tasks that pass about half of their runs.
 
 With the default objective, a step cannot adopt a change for cost alone. Two runs of one
 harness can differ in token use by sampling. Run the base twice with fresh samples and
